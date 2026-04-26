@@ -1,0 +1,42 @@
+<%- include('../partials/header', { title: 'Submission Detail' }) %>
+
+<div class="page-header">
+  <h1><%= submission.category_name %> – Submission Detail</h1>
+  <a href="/submissions" class="btn btn-secondary">← All Submissions</a>
+</div>
+
+<div class="detail-meta">
+  <span>🕐 Submitted: <strong><%= new Date(submission.submitted_at).toLocaleString() %></strong></span>
+  <span>🆔 UUID: <code><%= submission.submission_uuid %></code></span>
+</div>
+
+<section class="detail-section">
+  <h2>Answers</h2>
+  <dl class="answers-list">
+    <% const ans = submission.answers; %>
+    <% Object.keys(ans).forEach(key => { %>
+    <div class="answer-row">
+      <dt><%= labelMap[key] || key %></dt>
+      <dd><%= ans[key] || '—' %></dd>
+    </div>
+    <% }) %>
+  </dl>
+</section>
+
+<% if (images.length) { %>
+<section class="detail-section">
+  <h2>Images (<%= images.length %>)</h2>
+  <div class="image-gallery">
+    <% images.forEach(img => { %>
+    <div class="gallery-item">
+      <!-- Served directly from PostgreSQL BYTEA via /image/:id -->
+      <img src="/image/<%= img.id %>" alt="<%= img.original_name %>" />
+      <span><%= img.original_name %></span>
+      <small class="img-source">📦 Served from DB</small>
+    </div>
+    <% }) %>
+  </div>
+</section>
+<% } %>
+
+<%- include('../partials/footer') %>

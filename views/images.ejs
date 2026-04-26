@@ -1,0 +1,64 @@
+<%- include('partials/header', { title: 'Upload Images – ' + category.name }) %>
+
+<div class="form-header">
+  <div class="breadcrumb">
+    <a href="/">← Categories</a> / <strong><%= category.name %></strong>
+  </div>
+  <h1>Add Photos</h1>
+  <p class="subtitle">Upload images related to the <%= category.name %> inspection (optional, up to 10)</p>
+</div>
+
+<form method="POST"
+      action="/form/<%= slug %>/submit"
+      enctype="multipart/form-data"
+      class="question-form">
+
+  <!-- Plain JSON string — NOT URL encoded -->
+  <input type="hidden" name="_answers" value="<%= answersJson.replace(/"/g, '&quot;') %>">
+
+  <div class="upload-area" id="uploadArea">
+    <div class="upload-icon">📷</div>
+    <p>Drag & drop images here or <label for="images" class="upload-link">browse</label></p>
+    <p class="upload-hint">JPG, PNG, GIF, WEBP · Max 10 MB per file · Up to 10 images</p>
+    <input type="file" id="images" name="images" multiple accept="image/*" class="file-input" />
+  </div>
+
+  <div id="previewGrid" class="preview-grid"></div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-success">✔ Submit Inspection</button>
+  </div>
+</form>
+
+<script>
+  const input       = document.getElementById('images');
+  const area        = document.getElementById('uploadArea');
+  const previewGrid = document.getElementById('previewGrid');
+
+  function showPreviews(files) {
+    previewGrid.innerHTML = '';
+    Array.from(files).forEach(file => {
+      const reader = new FileReader();
+      reader.onload = e => {
+        const div = document.createElement('div');
+        div.className = 'preview-item';
+        div.innerHTML = `<img src="${e.target.result}" alt="${file.name}" /><span>${file.name}</span>`;
+        previewGrid.appendChild(div);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  input.addEventListener('change', () => showPreviews(input.files));
+
+  area.addEventListener('dragover',  e => { e.preventDefault(); area.classList.add('drag-over'); });
+  area.addEventListener('dragleave', () => area.classList.remove('drag-over'));
+  area.addEventListener('drop', e => {
+    e.preventDefault();
+    area.classList.remove('drag-over');
+    input.files = e.dataTransfer.files;
+    showPreviews(e.dataTransfer.files);
+  });
+</script>
+
+<%- include('partials/footer') %>

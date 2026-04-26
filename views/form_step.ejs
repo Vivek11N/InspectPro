@@ -1,0 +1,107 @@
+<%- include('partials/header', { title: category ? category.name : 'Form' }) %>
+
+<div class="form-header">
+  <h1><%= category ? category.name : 'Inspection Form' %></h1>
+  <% if (category && category.description) { %>
+    <div class="subtitle"><%= category.description %></div>
+  <% } %>
+</div>
+
+<form method="POST" action="/form/<%= slug %>/step" class="question-form" id="dynamicForm">
+  <input type="hidden" name="_group" value="<%= group %>">
+  <input type="hidden" name="_answers" value="<%= encodeURIComponent(JSON.stringify(answers)) %>">
+  
+  <% if (questions && questions.length > 0) { %>
+    <% questions.forEach(q => { %>
+      <div class="question-block" id="block_<%= q.id %>" 
+           data-field="<%= q.field_name %>" 
+           data-condition-field="<%= q.conditional_on_field || '' %>" 
+           data-condition-value="<%= q.conditional_on_value || '' %>">
+        <label class="question-label" for="q_<%= q.id %>">
+          <%= q.question_text %>
+          <% if (q.is_required) { %><span class="required">*</span><% } %>
+        </label>
+        <% if (q.field_type === 'text') { %>
+          <input type="text" id="q_<%= q.id %>" name="<%= q.field_name %>" class="form-input" value="<%= answers[q.field_name] || '' %>" <%= q.is_required ? 'required' : '' %> />
+        <% } else if (q.field_type === 'textarea') { %>
+          <textarea id="q_<%= q.id %>" name="<%= q.field_name %>" class="form-input form-textarea" <%= q.is_required ? 'required' : '' %>><%= answers[q.field_name] || '' %></textarea>
+        <% } else if (q.field_type === 'number') { %>
+          <input type="number" id="q_<%= q.id %>" name="<%= q.field_name %>" class="form-input" value="<%= answers[q.field_name] || '' %>" <%= q.is_required ? 'required' : '' %> />
+        <% } else if (q.field_type === 'yesno') { %>
+          <div class="radio-group">
+            <label class="radio-option"><input type="radio" name="<%= q.field_name %>" value="Yes" <%= answers[q.field_name] === 'Yes' ? 'checked' : '' %> <%= q.is_required ? 'required' : '' %> /> Yes</label>
+            <label class="radio-option"><input type="radio" name="<%= q.field_name %>" value="No" <%= answers[q.field_name] === 'No' ? 'checked' : '' %> <%= q.is_required ? 'required' : '' %> /> No</label>
+          </div>
+        <% } else if (q.field_type === 'select' && q.options) { %>
+          <select id="q_<%= q.id %>" name="<%= q.field_name %>" class="form-input" <%= q.is_required ? 'required' : '' %>>
+            <option value="">-- Select --</option>
+            <% JSON.parse(q.options).forEach(opt => { %>
+              <option value="<%= opt %>" <%= answers[q.field_name] === opt ? 'selected' : '' %>><%= opt %></option>
+            <% }) %>
+          </select>
+        <% } else if (q.field_type === 'radio' && q.options) { %>
+          <div class="radio-group">
+            <% JSON.parse(q.options).forEach(opt => { %>
+              <label class="radio-option"><input type="radio" name="<%= q.field_name %>" value="<%= opt %>" <%= answers[q.field_name] === opt ? 'checked' : '' %> <%= q.is_required ? 'required' : '' %> /> <%= opt %></label>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    <% }) %>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Next</button>
+    </div>
+  <% } else { %>
+    <div class="alert alert-info">No questions found for this category.</div>
+  <% } %>
+</form>
+
+<script>
+  function updateConditionalQuestions() {
+    const form = document.getElementById('dynamicForm');
+    const blocks = form.querySelectorAll('.question-block');
+    
+    blocks.forEach(block => {
+      const conditionField = block.dataset.conditionField;
+      const conditionValue = block.dataset.conditionValue;
+      
+      if (conditionField && conditionValue) {
+        const input = form.querySelector(`input[name="${conditionField}"], select[name="${conditionField}"], textarea[name="${conditionField}"]`);
+        if (input) {
+          let value = '';
+          if (input.type === 'radio' || input.type === 'checkbox') {
+            const checked = form.querySelector(`input[name="${conditionField}"]:checked`);
+            value = checked ? checked.value : '';
+          } else {
+            value = input.value;
+          }
+          
+          const matches = String(value).toLowerCase() === String(conditionValue).toLowerCase();
+          block.style.display = matches ? 'block' : 'none';
+          
+          // Update required attribute
+          const requiredInputs = block.querySelectorAll('input[required], select[required], textarea[required]');
+          requiredInputs.forEach(inp => {
+            if (!matches) {
+              inp.removeAttribute('required');
+            } else if (inp.dataset.required !== 'false') {
+              inp.setAttribute('required', 'required');
+            }
+          });
+        }
+      }
+    });
+  }
+  
+  // Update on page load
+  document.addEventListener('DOMContentLoaded', updateConditionalQuestions);
+  
+  // Update on any input change
+  const form = document.getElementById('dynamicForm');
+  if (form) {
+    form.addEventListener('change', updateConditionalQuestions);
+    form.addEventListener('input', updateConditionalQuestions);
+  }
+</script>
+
+<%- include('partials/footer') %>

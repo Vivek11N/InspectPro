@@ -1,0 +1,16 @@
+<%- include('../partials/header', { title: 'Submission Complete' }) %>
+
+<div class="thankyou-page">
+  <div class="thankyou-icon">✅</div>
+  <h1>Inspection Submitted!</h1>
+  <p>Your <strong><%= submission.category_name %></strong> inspection has been saved successfully.</p>
+  <p class="submission-id">Reference: <code><%= submission.submission_uuid %></code></p>
+
+  <div class="thankyou-actions">
+    <a href="/" class="btn btn-primary">Submit Another</a>
+    <a href="/submissions/<%= submission.submission_uuid %>" class="btn btn-secondary">View Submission</a>
+    <a href="/submissions" class="btn btn-secondary">All Submissions</a>
+  </div>
+</div>
+
+<%- include('../partials/footer') %>

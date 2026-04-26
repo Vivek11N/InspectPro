@@ -1,0 +1,113 @@
+<%- include('partials/header', { title: category.name + ' – Step ' + group }) %>
+
+<div class="form-header">
+  <div class="breadcrumb">
+    <a href="/">← Categories</a> / <strong><%= category.name %></strong>
+  </div>
+  <h1><%= category.name %> Inspection</h1>
+  <div class="step-indicator">
+    <% for(let i = 1; i <= maxGroup; i++) { %>
+      <span class="step-dot <%= i === group ? 'active' : (i < group ? 'done' : '') %>">
+        <%= i %>
+      </span>
+    <% } %>
+    <span class="step-label">Step <%= group %> of <%= maxGroup %></span>
+  </div>
+</div>
+
+<% if (questions.length === 0) { %>
+  <div class="alert alert-info">
+    No questions for this step. 
+    <a href="/admin/questions/new">Add questions</a> in the admin panel.
+  </div>
+  <form method="POST" action="/form/<%= slug %>/step">
+    <input type="hidden" name="_group"   value="<%= group %>">
+    <input type="hidden" name="_answers" value="<%= encodeURIComponent(JSON.stringify(answers)) %>">
+    <button type="submit" class="btn btn-primary">
+      <%= isLastGroup ? 'Continue to Images →' : 'Next Step →' %>
+    </button>
+  </form>
+<% } else { %>
+
+<form method="POST" action="/form/<%= slug %>/step" class="question-form" id="questionForm">
+  <input type="hidden" name="_group"   value="<%= group %>">
+  <input type="hidden" name="_answers" value="<%= JSON.stringify(answers).replace(/"/g, '&quot;') %>">
+
+  <% questions.forEach((q, idx) => { %>
+  <div class="question-block" data-field="<%= q.field_name %>">
+    <label class="question-label">
+      <%= q.question_text %>
+      <% if(q.is_required) { %><span class="required">*</span><% } %>
+    </label>
+
+    <% const currentVal = answers[q.field_name] || ''; %>
+
+    <% if (q.field_type === 'text') { %>
+      <input type="text" name="<%= q.field_name %>"
+             value="<%= currentVal %>"
+             class="form-input"
+             <%= q.is_required ? 'required' : '' %> />
+
+    <% } else if (q.field_type === 'number') { %>
+      <input type="number" name="<%= q.field_name %>"
+             value="<%= currentVal %>"
+             class="form-input"
+             <%= q.is_required ? 'required' : '' %> />
+
+    <% } else if (q.field_type === 'textarea') { %>
+      <textarea name="<%= q.field_name %>"
+                class="form-input form-textarea"
+                rows="4"
+                <%= q.is_required ? 'required' : '' %>><%= currentVal %></textarea>
+
+    <% } else if (q.field_type === 'yesno') { %>
+      <div class="radio-group">
+        <label class="radio-option">
+          <input type="radio" name="<%= q.field_name %>" value="yes"
+                 <%= currentVal === 'yes' ? 'checked' : '' %>
+                 <%= q.is_required ? 'required' : '' %> />
+          <span>Yes</span>
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="<%= q.field_name %>" value="no"
+                 <%= currentVal === 'no' ? 'checked' : '' %> />
+          <span>No</span>
+        </label>
+      </div>
+
+    <% } else if (q.field_type === 'radio') { %>
+      <% const ropts = q.options ? JSON.parse(q.options) : []; %>
+      <div class="radio-group">
+        <% ropts.forEach(opt => { %>
+        <label class="radio-option">
+          <input type="radio" name="<%= q.field_name %>"
+                 value="<%= opt %>"
+                 <%= currentVal === opt ? 'checked' : '' %>
+                 <%= q.is_required ? 'required' : '' %> />
+          <span><%= opt %></span>
+        </label>
+        <% }) %>
+      </div>
+
+    <% } else if (q.field_type === 'select') { %>
+      <% const sopts = q.options ? JSON.parse(q.options) : []; %>
+      <select name="<%= q.field_name %>" class="form-input"
+              <%= q.is_required ? 'required' : '' %>>
+        <option value="">— Select —</option>
+        <% sopts.forEach(opt => { %>
+          <option value="<%= opt %>" <%= currentVal === opt ? 'selected' : '' %>><%= opt %></option>
+        <% }) %>
+      </select>
+    <% } %>
+  </div>
+  <% }) %>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+      <%= isLastGroup ? 'Continue to Images →' : 'Next Step →' %>
+    </button>
+  </div>
+</form>
+<% } %>
+
+<%- include('partials/footer') %>

@@ -1,0 +1,182 @@
+<%- include('../../partials/header', { title: question ? 'Edit Question' : 'New Question' }) %>
+
+<div class="page-header">
+  <h1><%= question ? 'Edit Question' : 'Add New Question' %></h1>
+  <a href="/admin/questions" class="btn btn-secondary">← Back to Questions</a>
+</div>
+
+<form method="POST" action="<%= action %>" class="admin-form">
+
+  <div class="form-group">
+    <label>Category <span class="required">*</span></label>
+    <select name="category_id" class="form-input" required>
+      <option value="">— Select Category —</option>
+      <% categories.forEach(c => { %>
+        <option value="<%= c.id %>" <%= (question && question.category_id == c.id) ? 'selected' : '' %>>
+          <%= c.name %>
+        </option>
+      <% }) %>
+    </select>
+  </div>
+
+  <div class="form-group">
+    <label>Question Text <span class="required">*</span></label>
+    <input type="text" name="question_text" class="form-input"
+           value="<%= question ? question.question_text : '' %>" required />
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Field Name <span class="required">*</span>
+        <small>(unique identifier, no spaces e.g. kitchen_size)</small>
+      </label>
+      <input type="text" name="field_name" class="form-input"
+             value="<%= question ? question.field_name : '' %>"
+             pattern="[a-z0-9_]+" title="Lowercase letters, numbers and underscores only"
+             required />
+    </div>
+
+    <div class="form-group">
+      <label>Field Type <span class="required">*</span></label>
+      <select name="field_type" class="form-input" required id="fieldType">
+        <option value="">— Select Type —</option>
+        <option value="text" <%= (question && question.field_type === 'text') ? 'selected' : '' %>>Text Input</option>
+        <option value="textarea" <%= (question && question.field_type === 'textarea') ? 'selected' : '' %>>Text Area</option>
+        <option value="number" <%= (question && question.field_type === 'number') ? 'selected' : '' %>>Number</option>
+        <option value="yesno" <%= (question && question.field_type === 'yesno') ? 'selected' : '' %>>Yes / No</option>
+        <option value="select" <%= (question && question.field_type === 'select') ? 'selected' : '' %>>Dropdown</option>
+        <option value="radio" <%= (question && question.field_type === 'radio') ? 'selected' : '' %>>Radio Buttons</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="form-group" id="optionsGroup" style="display: none;">
+    <label>Options (one per line) <span class="required">*</span></label>
+    <textarea name="options_raw" class="form-input form-textarea" rows="4"
+              placeholder="Option A&#10;Option B&#10;Option C"><% if (question && question.options) { %><% const opts = JSON.parse(question.options); %><%- opts.join('\n') %><% } %></textarea>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Group / Step Index</label>
+      <input type="number" name="group_index" class="form-input" min="1"
+             value="<%= question ? question.group_index : 1 %>" />
+    </div>
+
+    <div class="form-group">
+      <label>Order Index</label>
+      <input type="number" name="order_index" class="form-input" min="0"
+             value="<%= question ? question.order_index : 0 %>" />
+    </div>
+  </div>
+
+  <div class="form-fieldset">
+    <legend>Conditional Display</legend>
+    <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem;">
+      Show this question only when another question has a specific answer.
+    </p>
+    
+    <div class="form-row">
+      <div class="form-group">
+        <label>Show When This Question</label>
+        <select name="conditional_on_field" class="form-input" id="conditionalField">
+          <option value="">— None (Always Show) —</option>
+          <% if (allQuestions && allQuestions.length > 0) { %>
+            <% allQuestions.forEach(q => { %>
+              <option value="<%= q.field_name %>" <%= (question && question.conditional_on_field === q.field_name) ? 'selected' : '' %>>
+                <%= q.question_text %> (field: <%= q.field_name %>)
+              </option>
+            <% }) %>
+          <% } %>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Equals This Value</label>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <input type="text" name="conditional_on_value" class="form-input" id="conditionalValue"
+                 value="<%= question ? (question.conditional_on_value || '') : '' %>"
+                 placeholder="e.g. Yes, True, Kitchen" />
+          <select id="conditionalValueSelect" class="form-input" style="flex: 1; display: none;">
+            <option value="">— Type manually or select —</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="is_required" <%= (question && question.is_required) ? 'checked' : '' %> />
+      Required
+    </label>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+      <%= question ? 'Update Question' : 'Create Question' %>
+    </button>
+    <a href="/admin/questions" class="btn btn-secondary">Cancel</a>
+  </div>
+
+</form>
+
+<script>
+  const fieldTypeSelect = document.getElementById('fieldType');
+  const optionsGroup = document.getElementById('optionsGroup');
+  const conditionalField = document.getElementById('conditionalField');
+  const conditionalValue = document.getElementById('conditionalValue');
+  const conditionalValueSelect = document.getElementById('conditionalValueSelect');
+  
+  // Map of field_name to options for dropdowns
+  const questionOptions = {
+    <% if (allQuestions && allQuestions.length > 0) { %>
+      <% allQuestions.forEach((q, idx) => { %>
+        '<%= q.field_name %>': <%= q.options ? JSON.stringify(JSON.parse(q.options)) : (q.field_type === 'yesno' ? '["Yes", "No"]' : '[]') %><%= idx < allQuestions.length - 1 ? ',' : '' %>
+      <% }) %>
+    <% } %>
+  };
+  
+  function toggleOptionsField() {
+    const value = fieldTypeSelect.value;
+    if (value === 'select' || value === 'radio') {
+      optionsGroup.style.display = 'block';
+      optionsGroup.querySelector('textarea').required = true;
+    } else {
+      optionsGroup.style.display = 'none';
+      optionsGroup.querySelector('textarea').required = false;
+    }
+  }
+  
+  function updateConditionalValueOptions() {
+    const selectedField = conditionalField.value;
+    const options = questionOptions[selectedField] || [];
+    
+    if (options.length > 0) {
+      conditionalValueSelect.innerHTML = '<option value="">— Select Value —</option>' + 
+        options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
+      conditionalValueSelect.style.display = 'block';
+      conditionalValue.style.display = 'none';
+    } else {
+      conditionalValueSelect.style.display = 'none';
+      conditionalValue.style.display = 'block';
+    }
+  }
+  
+  function syncConditionalValue() {
+    if (conditionalValueSelect.style.display !== 'none') {
+      conditionalValue.value = conditionalValueSelect.value;
+    } else {
+      conditionalValue.value = conditionalValue.value;
+    }
+  }
+  
+  fieldTypeSelect.addEventListener('change', toggleOptionsField);
+  conditionalField.addEventListener('change', updateConditionalValueOptions);
+  conditionalValueSelect.addEventListener('change', syncConditionalValue);
+  
+  toggleOptionsField();
+  updateConditionalValueOptions();
+</script>
+
+<%- include('../../partials/footer') %>

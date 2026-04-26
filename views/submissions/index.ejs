@@ -1,0 +1,36 @@
+<%- include('../partials/header', { title: 'Form Submissions' }) %>
+
+<div class="page-header">
+  <h1>Form Submissions</h1>
+</div>
+
+<% if (submissions && submissions.length === 0) { %>
+  <div class="alert alert-info">No submissions yet.</div>
+<% } else { %>
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Category</th>
+        <th>Submitted At</th>
+        <th>Images</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% submissions.forEach(sub => { %>
+      <tr>
+        <td><code><%= sub.submission_uuid.substring(0, 8) %>...</code></td>
+        <td><%= sub.category_name %></td>
+        <td><%= new Date(sub.submitted_at).toLocaleString() %></td>
+        <td><span class="badge"><%= sub.image_count %></span></td>
+        <td>
+          <a href="/submissions/<%= sub.submission_uuid %>/details" class="btn btn-sm btn-secondary">View Details</a>
+        </td>
+      </tr>
+      <% }) %>
+    </tbody>
+  </table>
+<% } %>
+
+<%- include('../partials/footer') %>
