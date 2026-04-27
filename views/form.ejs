@@ -21,128 +21,177 @@
   <% } %>
 </div>
 
-<form method="POST" action="/form/<%= slug %>/step" class="question-form" id="dynamicForm">
-  <input type="hidden" name="_group" value="<%= group %>">
-  <input type="hidden" name="_answers" value="<%= encodeURIComponent(JSON.stringify(answers)) %>">
-  
-  <% if (questions && questions.length > 0) { %>
-    <% questions.forEach(q => { %>
-      <div class="question-block" id="block_<%= q.id %>" 
-           data-condition-question="<%= q.conditional_on_question_id || '' %>" 
-           data-condition-value="<%= q.conditional_on_value || '' %>">
-        <label class="question-label" for="q_<%= q.id %>">
-          <%= q.question_text %>
-          <% if (q.is_required) { %><span class="required">*</span><% } %>
+<% if (questions.length === 0) { %>
+  <div class="alert alert-info">
+    No questions for this step.
+    <a href="/admin/questions/new">Add questions</a> in the admin panel.
+  </div>
+  <form method="POST" action="/form/<%= slug %>/step">
+    <input type="hidden" name="_group"   value="<%= group %>">
+    <input type="hidden" name="_answers" value="<%= JSON.stringify(answers) %>">
+    <button type="submit" class="btn btn-primary">
+      <%= isLastGroup ? 'Continue to Images →' : 'Next Step →' %>
+    </button>
+  </form>
+<% } else { %>
+
+<form method="POST" action="/form/<%= slug %>/step" class="question-form" id="questionForm">
+  <input type="hidden" name="_group"   value="<%= group %>">
+  <input type="hidden" name="_answers" value="<%= JSON.stringify(answers).replace(/"/g, '&quot;') %>">
+
+  <% const stepFieldNames = questions.map(qq => qq.field_name); %>
+
+  <% questions.forEach((q) => { %>
+  <%
+    // Does this question have a condition at all?
+    const hasCond = !!(q.conditional_on_field && q.conditional_on_value);
+    // Is the field it depends on also on THIS step? If so, JS handles it.
+    const condOnSameStep = hasCond && stepFieldNames.includes(q.conditional_on_field);
+    // Start hidden only when the dependency is on the same step
+    // (cross-step dependencies were already resolved server-side).
+    const startHidden = condOnSameStep;
+  %>
+  <div class="question-block"
+       data-field="<%= q.field_name %>"
+       data-conditional-field="<%= condOnSameStep ? q.conditional_on_field : '' %>"
+       data-conditional-value="<%= condOnSameStep ? q.conditional_on_value  : '' %>"
+       style="<%= startHidden ? 'display:none;' : '' %>">
+
+    <label class="question-label">
+      <%= q.question_text %>
+      <% if (q.is_required) { %><span class="required">*</span><% } %>
+    </label>
+
+    <% const currentVal = answers[q.field_name] || ''; %>
+
+    <% if (q.field_type === 'text') { %>
+      <input type="text" name="<%= q.field_name %>"
+             value="<%= currentVal %>"
+             class="form-input"
+             <%= (q.is_required && !startHidden) ? 'required' : '' %> />
+
+    <% } else if (q.field_type === 'number') { %>
+      <input type="number" name="<%= q.field_name %>"
+             value="<%= currentVal %>"
+             class="form-input"
+             <%= (q.is_required && !startHidden) ? 'required' : '' %> />
+
+    <% } else if (q.field_type === 'textarea') { %>
+      <textarea name="<%= q.field_name %>"
+                class="form-input form-textarea"
+                rows="4"
+                <%= (q.is_required && !startHidden) ? 'required' : '' %>><%= currentVal %></textarea>
+
+    <% } else if (q.field_type === 'yesno') { %>
+      <div class="radio-group">
+        <label class="radio-option">
+          <input type="radio" name="<%= q.field_name %>" value="Yes"
+                 <%= currentVal === 'yes' ? 'checked' : '' %>
+                 <%= (q.is_required && !startHidden) ? 'required' : '' %> />
+          <span>Yes</span>
+        </label>
+        <label class="radio-option">
+          <input type="radio" name="<%= q.field_name %>" value="No"
+                 <%= currentVal === 'no' ? 'checked' : '' %> />
+          <span>No</span>
         </label>
 
-        <% if (q.field_type === 'text') { %>
-          <input type="text" id="q_<%= q.id %>" name="<%= q.id %>" class="form-input"
-                 value="<%= answers[String(q.id)] || '' %>"
-                 <%= q.is_required ? 'required' : '' %> />
-
-        <% } else if (q.field_type === 'textarea') { %>
-          <textarea id="q_<%= q.id %>" name="<%= q.id %>" class="form-input form-textarea"
-                    <%= q.is_required ? 'required' : '' %>><%= answers[String(q.id)] || '' %></textarea>
-
-        <% } else if (q.field_type === 'number') { %>
-          <input type="number" id="q_<%= q.id %>" name="<%= q.id %>" class="form-input"
-                 value="<%= answers[String(q.id)] || '' %>"
-                 <%= q.is_required ? 'required' : '' %> />
-
-        <% } else if (q.field_type === 'yesno') { %>
-          <div class="radio-group">
-            <label class="radio-option">
-              <input type="radio" name="<%= q.id %>" value="Yes"
-                     <%= answers[String(q.id)] === 'Yes' ? 'checked' : '' %>
-                     <%= q.is_required ? 'required' : '' %> /> Yes
-            </label>
-            <label class="radio-option">
-              <input type="radio" name="<%= q.id %>" value="No"
-                     <%= answers[String(q.id)] === 'No' ? 'checked' : '' %>
-                     <%= q.is_required ? 'required' : '' %> /> No
-            </label>
-          </div>
-
-        <% } else if (q.field_type === 'select' && q.options) { %>
-          <select id="q_<%= q.id %>" name="<%= q.id %>" class="form-input"
-                  <%= q.is_required ? 'required' : '' %>>
-            <option value="">-- Select --</option>
-            <% safeOptions(q.options).forEach(opt => { %>
-              <option value="<%= opt %>" <%= answers[String(q.id)] === opt ? 'selected' : '' %>><%= opt %></option>
-            <% }) %>
-          </select>
-
-        <% } else if (q.field_type === 'radio' && q.options) { %>
-          <div class="radio-group">
-            <% safeOptions(q.options).forEach(opt => { %>
-              <label class="radio-option">
-                <input type="radio" name="<%= q.id %>" value="<%= opt %>"
-                       <%= answers[String(q.id)] === opt ? 'checked' : '' %>
-                       <%= q.is_required ? 'required' : '' %> /> <%= opt %>
-              </label>
-            <% }) %>
-          </div>
-        <% } %>
-
+    <% } else if (q.field_type === 'radio') { %>
+      <% const ropts = q.options ? JSON.parse(q.options) : []; %>
+      <div class="radio-group">
+        <% ropts.forEach((opt, oidx) => { %>
+        <label class="radio-option">
+          <input type="radio" name="<%= q.field_name %>"
+                 value="<%= opt %>"
+                 <%= currentVal === opt ? 'checked' : '' %>
+                 <%= (q.is_required && !startHidden && oidx === 0) ? 'required' : '' %> />
+          <span><%= opt %></span>
+        </label>
+        <% }) %>
       </div>
-    <% }) %>
 
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary">Next</button>
-    </div>
-  <% } else { %>
-    <div class="alert alert-info">No questions found for this category.</div>
-  <% } %>
+    <% } else if (q.field_type === 'select') { %>
+      <% const sopts = q.options ? JSON.parse(q.options) : []; %>
+      <select name="<%= q.field_name %>" class="form-input"
+              <%= (q.is_required && !startHidden) ? 'required' : '' %>>
+        <option value="">— Select —</option>
+        <% sopts.forEach(opt => { %>
+          <option value="<%= opt %>" <%= currentVal === opt ? 'selected' : '' %>><%= opt %></option>
+        <% }) %>
+      </select>
+    <% } %>
+  </div>
+  <% }) %>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+      <%= isLastGroup ? 'Continue to Images →' : 'Next Step →' %>
+    </button>
+  </div>
 </form>
+<% } %>
+
+<%- include('partials/footer') %>
 
 <script>
-  function updateConditionalQuestions() {
-    const form = document.getElementById('dynamicForm');
-    const blocks = form.querySelectorAll('.question-block');
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('questionForm');
+    if (!form) return;
 
-    blocks.forEach(block => {
-      const conditionQuestion = block.dataset.conditionQuestion; // question ID
-      const conditionValue    = block.dataset.conditionValue;
+    const questionBlocks = Array.from(form.querySelectorAll('.question-block'));
 
-      if (conditionQuestion && conditionValue) {
-        // Find the input whose name equals the condition question ID
-        const input = form.querySelector(
-          `input[name="${conditionQuestion}"], select[name="${conditionQuestion}"], textarea[name="${conditionQuestion}"]`
-        );
+    // Store each input's original `required` state once, so we can
+    // restore it correctly when the block becomes visible again.
+    questionBlocks.forEach(block => {
+      block.querySelectorAll('input, select, textarea').forEach(el => {
+        el.dataset.wasRequired = el.required ? 'true' : 'false';
+      });
+    });
 
-        if (input) {
-          let value = '';
-          if (input.type === 'radio' || input.type === 'checkbox') {
-            const checked = form.querySelector(`input[name="${conditionQuestion}"]:checked`);
-            value = checked ? checked.value : '';
-          } else {
-            value = input.value;
-          }
+    // Toggle required on every input inside a block.
+    // Hidden fields must never be required or they block submission.
+    function setBlockRequired(block, isVisible) {
+      block.querySelectorAll('input, select, textarea').forEach(el => {
+        el.required = isVisible && el.dataset.wasRequired === 'true';
+      });
+    }
 
-          const matches = String(value).toLowerCase() === String(conditionValue).toLowerCase();
-          block.style.display = matches ? 'block' : 'none';
+    // Get the current value of any named field in the form.
+    function getFieldValue(fieldName) {
+      const checked = form.querySelector(`[name="${fieldName}"]:checked`);
+      if (checked) return checked.value;
+      const el = form.querySelector(`[name="${fieldName}"]`);
+      return el ? el.value : '';
+    }
 
-          // Toggle required attribute so hidden fields don't block form submit
-          const requiredInputs = block.querySelectorAll('input[required], select[required], textarea[required]');
-          requiredInputs.forEach(inp => {
-            if (!matches) {
-              inp.removeAttribute('required');
-            } else {
-              inp.setAttribute('required', 'required');
-            }
-          });
+    function updateVisibility() {
+      questionBlocks.forEach(block => {
+        const condField = block.dataset.conditionalField;
+        const condValue = block.dataset.conditionalValue;
+
+        if (condField && condValue) {
+          const actual  = getFieldValue(condField);
+         const normalize = (v) => (v || '').toString().trim().toLowerCase();
+
+const visible = normalize(actual) === normalize(condValue);
+          block.style.display = visible ? '' : 'none';
+          setBlockRequired(block, visible);
+        } else {
+          // No condition — always visible
+          block.style.display = '';
+          setBlockRequired(block, true);
         }
       }
     });
   }
 
-  document.addEventListener('DOMContentLoaded', updateConditionalQuestions);
+    // Re-evaluate on any user interaction
+    form.addEventListener('change', updateVisibility);
+    form.addEventListener('input',  updateVisibility);
 
-  const form = document.getElementById('dynamicForm');
-  if (form) {
-    form.addEventListener('change', updateConditionalQuestions);
-    form.addEventListener('input',  updateConditionalQuestions);
-  }
+    // Run once on load to handle pre-filled answers
+    updateVisibility();
+  });
 </script>
 
 <%- include('partials/footer') %>
