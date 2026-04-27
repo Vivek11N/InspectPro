@@ -15,7 +15,6 @@ CREATE TABLE IF NOT EXISTS questions (
   id SERIAL PRIMARY KEY,
   category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
   question_text TEXT NOT NULL,
-  field_name VARCHAR(100) NOT NULL,
   field_type VARCHAR(50) NOT NULL DEFAULT 'text',
   -- field_type options: text | textarea | number | yesno | select | radio
   options JSONB,           -- for select/radio: ["Option A","Option B"]

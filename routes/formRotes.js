@@ -183,4 +183,40 @@ router.post('/form/:slug/submit', upload.array('images', 10), async (req, res, n
   }
 });
 
+// ── GET /form/:slug — conditional logic now uses question ID ──────────────────
+router.get('/form/:slug', async (req, res, next) => {
+  try {
+    const { slug } = req.params;
+    const group    = parseInt(req.query.group) || 1;
+    const answers  = parseAnswers(req.query.answers);
+
+    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
+    if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
+
+    const { rows: allQuestions } = await pool.query(
+      'SELECT * FROM questions WHERE category_id = $1 ORDER BY group_index, order_index',
+      [cats[0].id]
+    );
+
+    const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
+
+    const groupQuestions = allQuestions.filter(q => {
+      if (q.group_index !== group) return false;
+
+      // Conditional check now uses question ID instead of field_name
+      if (q.conditional_on_question_id && q.conditional_on_value) {
+        const linkedAnswer = answers[String(q.conditional_on_question_id)];
+        return String(linkedAnswer || '').trim().toLowerCase() ===
+               String(q.conditional_on_value).trim().toLowerCase();
+      }
+      return true;
+    });
+
+    res.render('form', {
+      category: cats[0], questions: groupQuestions, group,
+      maxGroup, isLastGroup: group >= maxGroup, answers, slug,
+    });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

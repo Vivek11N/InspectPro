@@ -1,3 +1,17 @@
+<%
+  function safeOptions(raw) {
+    if (!raw) return [];
+    if (typeof raw !== 'string') return raw;
+    const trimmed = raw.trim();
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed : [String(parsed)];
+    } catch {
+      return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+%>
+
 <%- include('../../partials/header', { title: question ? 'Edit Question' : 'New Question' }) %>
 
 <div class="page-header">
@@ -25,19 +39,10 @@
            value="<%= question ? question.question_text : '' %>" required />
   </div>
 
-  <div class="form-row">
-    <div class="form-group">
-      <label>Field Name <span class="required">*</span>
-        <small>(unique identifier, no spaces e.g. kitchen_size)</small>
-      </label>
-      <input type="text" name="field_name" class="form-input"
-             value="<%= question ? question.field_name : '' %>"
-             pattern="[a-z0-9_]+" title="Lowercase letters, numbers and underscores only"
-             required />
-    </div>
 
+    
     <div class="form-group">
-      <label>Field Type <span class="required">*</span></label>
+      <label>Answer Type <span class="required">*</span></label>
       <select name="field_type" class="form-input" required id="fieldType">
         <option value="">— Select Type —</option>
         <option value="text"     <%= (question && question.field_type === 'text')     ? 'selected' : '' %>>Text Input</option>
@@ -48,7 +53,7 @@
         <option value="radio"    <%= (question && question.field_type === 'radio')    ? 'selected' : '' %>>Radio Buttons</option>
       </select>
     </div>
-  </div>
+
 
   <%
     /* Safe helper: options is already a clean JSON string from the route,
@@ -66,13 +71,13 @@
 
   <div class="form-row">
     <div class="form-group">
-      <label>Group / Step Index</label>
+      <label>Group Number</label>
       <input type="number" name="group_index" class="form-input" min="1"
              value="<%= question ? question.group_index : 1 %>" />
     </div>
 
     <div class="form-group">
-      <label>Order Index</label>
+      <label>Question number</label>
       <input type="number" name="order_index" class="form-input" min="0"
              value="<%= question ? question.order_index : 0 %>" />
     </div>
@@ -86,14 +91,14 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Show When This Question</label>
-        <select name="conditional_on_field" class="form-input" id="conditionalField">
+        <label>Show When The Question</label>
+        <select name="conditional_on_question_id" class="form-input" id="conditionalField">
           <option value="">— None (Always Show) —</option>
           <% if (allQuestions && allQuestions.length > 0) { %>
             <% allQuestions.forEach(q => { %>
-              <option value="<%= q.field_name %>"
-                <%= (question && question.conditional_on_field === q.field_name) ? 'selected' : '' %>>
-                <%= q.question_text %> (field: <%= q.field_name %>)
+              <option value="<%= q.id %>"
+                <%= (question && question.conditional_on_question_id === q.id) ? 'selected' : '' %>>
+                <%= q.question_text %>
               </option>
             <% }) %>
           <% } %>
@@ -165,7 +170,7 @@
                  opts = '[]';
                }
           %>
-            '<%= q.field_name %>': <%- opts %><%= idx < allQuestions.length - 1 ? ',' : '' %>
+            '<%= q.id %>': <%- opts %><%= idx < allQuestions.length - 1 ? ',' : '' %>
           <% }) %>
         <% } %>
       };

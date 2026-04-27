@@ -1,18 +1,24 @@
-<%- include('partials/header', { title: category.name + ' – Step ' + group }) %>
+<%
+  function safeOptions(raw) {
+    if (!raw) return [];
+    if (typeof raw !== 'string') return raw;
+    const trimmed = raw.trim();
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? parsed : [String(parsed)];
+    } catch {
+      return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+%>
+
+<%- include('partials/header', { title: category ? category.name : 'Form' }) %>
 
 <div class="form-header">
-  <div class="breadcrumb">
-    <a href="/">← Categories</a> / <strong><%= category.name %></strong>
-  </div>
-  <h1><%= category.name %> Inspection</h1>
-  <div class="step-indicator">
-    <% for(let i = 1; i <= maxGroup; i++) { %>
-      <span class="step-dot <%= i === group ? 'active' : (i < group ? 'done' : '') %>">
-        <%= i %>
-      </span>
-    <% } %>
-    <span class="step-label">Step <%= group %> of <%= maxGroup %></span>
-  </div>
+  <h1><%= category ? category.name : 'Inspection Form' %></h1>
+  <% if (category && category.description) { %>
+    <div class="subtitle"><%= category.description %></div>
+  <% } %>
 </div>
 
 <% if (questions.length === 0) { %>
@@ -89,7 +95,6 @@
                  <%= currentVal === 'no' ? 'checked' : '' %> />
           <span>No</span>
         </label>
-      </div>
 
     <% } else if (q.field_type === 'radio') { %>
       <% const ropts = q.options ? JSON.parse(q.options) : []; %>
@@ -176,8 +181,9 @@ const visible = normalize(actual) === normalize(condValue);
           block.style.display = '';
           setBlockRequired(block, true);
         }
-      });
-    }
+      }
+    });
+  }
 
     // Re-evaluate on any user interaction
     form.addEventListener('change', updateVisibility);
@@ -187,3 +193,5 @@ const visible = normalize(actual) === normalize(condValue);
     updateVisibility();
   });
 </script>
+
+<%- include('partials/footer') %>
