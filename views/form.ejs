@@ -17,12 +17,12 @@
 
 <% if (questions.length === 0) { %>
   <div class="alert alert-info">
-    No questions for this step. 
+    No questions for this step.
     <a href="/admin/questions/new">Add questions</a> in the admin panel.
   </div>
   <form method="POST" action="/form/<%= slug %>/step">
     <input type="hidden" name="_group"   value="<%= group %>">
-    <input type="hidden" name="_answers" value="<%= encodeURIComponent(JSON.stringify(answers)) %>">
+    <input type="hidden" name="_answers" value="<%= JSON.stringify(answers) %>">
     <button type="submit" class="btn btn-primary">
       <%= isLastGroup ? 'Continue to Images →' : 'Next Step →' %>
     </button>
@@ -33,11 +33,27 @@
   <input type="hidden" name="_group"   value="<%= group %>">
   <input type="hidden" name="_answers" value="<%= JSON.stringify(answers).replace(/"/g, '&quot;') %>">
 
-  <% questions.forEach((q, idx) => { %>
-  <div class="question-block" data-field="<%= q.field_name %>">
+  <% const stepFieldNames = questions.map(qq => qq.field_name); %>
+
+  <% questions.forEach((q) => { %>
+  <%
+    // Does this question have a condition at all?
+    const hasCond = !!(q.conditional_on_field && q.conditional_on_value);
+    // Is the field it depends on also on THIS step? If so, JS handles it.
+    const condOnSameStep = hasCond && stepFieldNames.includes(q.conditional_on_field);
+    // Start hidden only when the dependency is on the same step
+    // (cross-step dependencies were already resolved server-side).
+    const startHidden = condOnSameStep;
+  %>
+  <div class="question-block"
+       data-field="<%= q.field_name %>"
+       data-conditional-field="<%= condOnSameStep ? q.conditional_on_field : '' %>"
+       data-conditional-value="<%= condOnSameStep ? q.conditional_on_value  : '' %>"
+       style="<%= startHidden ? 'display:none;' : '' %>">
+
     <label class="question-label">
       <%= q.question_text %>
-      <% if(q.is_required) { %><span class="required">*</span><% } %>
+      <% if (q.is_required) { %><span class="required">*</span><% } %>
     </label>
 
     <% const currentVal = answers[q.field_name] || ''; %>
@@ -46,30 +62,30 @@
       <input type="text" name="<%= q.field_name %>"
              value="<%= currentVal %>"
              class="form-input"
-             <%= q.is_required ? 'required' : '' %> />
+             <%= (q.is_required && !startHidden) ? 'required' : '' %> />
 
     <% } else if (q.field_type === 'number') { %>
       <input type="number" name="<%= q.field_name %>"
              value="<%= currentVal %>"
              class="form-input"
-             <%= q.is_required ? 'required' : '' %> />
+             <%= (q.is_required && !startHidden) ? 'required' : '' %> />
 
     <% } else if (q.field_type === 'textarea') { %>
       <textarea name="<%= q.field_name %>"
                 class="form-input form-textarea"
                 rows="4"
-                <%= q.is_required ? 'required' : '' %>><%= currentVal %></textarea>
+                <%= (q.is_required && !startHidden) ? 'required' : '' %>><%= currentVal %></textarea>
 
     <% } else if (q.field_type === 'yesno') { %>
       <div class="radio-group">
         <label class="radio-option">
-          <input type="radio" name="<%= q.field_name %>" value="yes"
+          <input type="radio" name="<%= q.field_name %>" value="Yes"
                  <%= currentVal === 'yes' ? 'checked' : '' %>
-                 <%= q.is_required ? 'required' : '' %> />
+                 <%= (q.is_required && !startHidden) ? 'required' : '' %> />
           <span>Yes</span>
         </label>
         <label class="radio-option">
-          <input type="radio" name="<%= q.field_name %>" value="no"
+          <input type="radio" name="<%= q.field_name %>" value="No"
                  <%= currentVal === 'no' ? 'checked' : '' %> />
           <span>No</span>
         </label>
@@ -78,12 +94,12 @@
     <% } else if (q.field_type === 'radio') { %>
       <% const ropts = q.options ? JSON.parse(q.options) : []; %>
       <div class="radio-group">
-        <% ropts.forEach(opt => { %>
+        <% ropts.forEach((opt, oidx) => { %>
         <label class="radio-option">
           <input type="radio" name="<%= q.field_name %>"
                  value="<%= opt %>"
                  <%= currentVal === opt ? 'checked' : '' %>
-                 <%= q.is_required ? 'required' : '' %> />
+                 <%= (q.is_required && !startHidden && oidx === 0) ? 'required' : '' %> />
           <span><%= opt %></span>
         </label>
         <% }) %>
@@ -92,7 +108,7 @@
     <% } else if (q.field_type === 'select') { %>
       <% const sopts = q.options ? JSON.parse(q.options) : []; %>
       <select name="<%= q.field_name %>" class="form-input"
-              <%= q.is_required ? 'required' : '' %>>
+              <%= (q.is_required && !startHidden) ? 'required' : '' %>>
         <option value="">— Select —</option>
         <% sopts.forEach(opt => { %>
           <option value="<%= opt %>" <%= currentVal === opt ? 'selected' : '' %>><%= opt %></option>
@@ -111,52 +127,63 @@
 <% } %>
 
 <%- include('partials/footer') %>
+
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
-    // Gather all question blocks and their conditions
-    const questionBlocks = Array.from(document.querySelectorAll('.question-block'));
-    // Build a map of field_name to block and condition
-    const fieldMap = {};
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('questionForm');
+    if (!form) return;
+
+    const questionBlocks = Array.from(form.querySelectorAll('.question-block'));
+
+    // Store each input's original `required` state once, so we can
+    // restore it correctly when the block becomes visible again.
     questionBlocks.forEach(block => {
-      const field = block.getAttribute('data-field');
-      fieldMap[field] = block;
-      // Attach condition info if present
-      block.conditionalField = block.getAttribute('data-conditional-field');
-      block.conditionalValue = block.getAttribute('data-conditional-value');
+      block.querySelectorAll('input, select, textarea').forEach(el => {
+        el.dataset.wasRequired = el.required ? 'true' : 'false';
+      });
     });
 
-    // Helper: get current value for a field
-    function getFieldValue(field) {
-      const input = document.querySelector(`[name="${field}"]`);
-      if (!input) return '';
-      if (input.type === 'radio') {
-        const checked = document.querySelector(`[name="${field}"]:checked`);
-        return checked ? checked.value : '';
-      }
-      return input.value;
+    // Toggle required on every input inside a block.
+    // Hidden fields must never be required or they block submission.
+    function setBlockRequired(block, isVisible) {
+      block.querySelectorAll('input, select, textarea').forEach(el => {
+        el.required = isVisible && el.dataset.wasRequired === 'true';
+      });
     }
 
-    // Show/hide questions based on conditions
+    // Get the current value of any named field in the form.
+    function getFieldValue(fieldName) {
+      const checked = form.querySelector(`[name="${fieldName}"]:checked`);
+      if (checked) return checked.value;
+      const el = form.querySelector(`[name="${fieldName}"]`);
+      return el ? el.value : '';
+    }
+
     function updateVisibility() {
       questionBlocks.forEach(block => {
-        const condField = block.conditionalField;
-        const condValue = block.conditionalValue;
+        const condField = block.dataset.conditionalField;
+        const condValue = block.dataset.conditionalValue;
+
         if (condField && condValue) {
-          const actual = getFieldValue(condField);
-          if (actual.trim().toLowerCase() === condValue.trim().toLowerCase()) {
-            block.style.display = '';
-          } else {
-            block.style.display = 'none';
-          }
+          const actual  = getFieldValue(condField);
+         const normalize = (v) => (v || '').toString().trim().toLowerCase();
+
+const visible = normalize(actual) === normalize(condValue);
+          block.style.display = visible ? '' : 'none';
+          setBlockRequired(block, visible);
         } else {
+          // No condition — always visible
           block.style.display = '';
+          setBlockRequired(block, true);
         }
       });
     }
 
-    // Listen for changes on all inputs
-    document.getElementById('questionForm').addEventListener('input', updateVisibility);
-    // Initial update
+    // Re-evaluate on any user interaction
+    form.addEventListener('change', updateVisibility);
+    form.addEventListener('input',  updateVisibility);
+
+    // Run once on load to handle pre-filled answers
     updateVisibility();
   });
 </script>
