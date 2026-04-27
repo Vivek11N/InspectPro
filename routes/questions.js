@@ -63,14 +63,20 @@ router.get('/new', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── POST /admin/questions — Create question ───────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
     const {
-      category_id, question_text, field_type,
+     category_id, question_text, field_type, 
       options_raw, order_index, group_index,
       conditional_on_question_id, conditional_on_value, is_required,
     } = req.body;
+
+    // Auto-generate field_name from question_text
+    const field_name = question_text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '');
 
     let options = null;
     if (options_raw && options_raw.trim()) {
@@ -78,17 +84,17 @@ router.post('/', async (req, res, next) => {
     }
 
     await pool.query(
-      `INSERT INTO questions
-         (category_id, question_text, field_type, options,
-          order_index, group_index, conditional_on_question_id, conditional_on_value, is_required)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [
-        category_id, question_text, field_type, options,
-        order_index || 0, group_index || 1,
-        conditional_on_question_id || null, conditional_on_value || null,
-        is_required === 'on' || is_required === 'true',
-      ] 
-    );
+  `INSERT INTO questions
+     (category_id, question_text, field_name, field_type, options,
+      order_index, group_index, conditional_on_question_id, conditional_on_value, is_required)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+  [
+    category_id, question_text, field_name, field_type, options,
+    order_index || 0, group_index || 1,
+    conditional_on_question_id || null, conditional_on_value || null,
+    is_required === 'on' || is_required === 'true',
+  ]
+);
     res.redirect('/admin/questions');
   } catch (err) { next(err); }
 });

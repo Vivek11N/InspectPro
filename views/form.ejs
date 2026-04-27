@@ -96,60 +96,48 @@
 </form>
 
 <script>
-  function updateConditionalQuestions() {
+  document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('dynamicForm');
-    const blocks = form.querySelectorAll('.question-block');
-
-    blocks.forEach(block => {
-      const conditionQuestion = block.dataset.conditionQuestion; // question ID
-      const conditionValue    = block.dataset.conditionValue;
-
-      if (conditionQuestion && conditionValue) {
-        // Find the input whose name equals the condition question ID
-        const input = form.querySelector(
-          `input[name="${conditionQuestion}"], select[name="${conditionQuestion}"], textarea[name="${conditionQuestion}"]`
-        );
-
-        if (input) {
-          let value = '';
-          if (input.type === 'radio' || input.type === 'checkbox') {
-            const checked = form.querySelector(`input[name="${conditionQuestion}"]:checked`);
-            value = checked ? checked.value : '';
-          } else {
-            value = input.value;
-          }
-
-          const matches = String(value).toLowerCase() === String(conditionValue).toLowerCase();
-          block.style.display = matches ? 'block' : 'none';
-
-          // Toggle required attribute so hidden fields don't block form submit
-          const requiredInputs = block.querySelectorAll('input[required], select[required], textarea[required]');
-          requiredInputs.forEach(inp => {
-            if (!matches) {
-              inp.removeAttribute('required');
+    if (!form) return;
+    function updateConditionalQuestions() {
+      const blocks = form.querySelectorAll('.question-block');
+      blocks.forEach(block => {
+        const conditionQuestion = block.dataset.conditionQuestion; // question ID
+        const conditionValue    = block.dataset.conditionValue;
+        if (conditionQuestion && conditionValue) {
+          // Find the input whose name equals the condition question ID
+          const input = form.querySelector(
+            `input[name="${conditionQuestion}"], select[name="${conditionQuestion}"], textarea[name="${conditionQuestion}"]`
+          );
+          if (input) {
+            let value = '';
+            if (input.type === 'radio' || input.type === 'checkbox') {
+              const checked = form.querySelector(`input[name="${conditionQuestion}"]:checked`);
+              value = checked ? checked.value : '';
             } else {
-              inp.setAttribute('required', 'required');
+              value = input.value;
             }
-          });
+            const matches = String(value).toLowerCase() === String(conditionValue).toLowerCase();
+            block.style.display = matches ? 'block' : 'none';
+            // Toggle required attribute so hidden fields don't block form submit
+            const requiredInputs = block.querySelectorAll('input[required], select[required], textarea[required]');
+            requiredInputs.forEach(inp => {
+              if (!matches) {
+                inp.removeAttribute('required');
+              } else {
+                inp.setAttribute('required', 'required');
+              }
+            });
+          }
+        } else {
+          block.style.display = 'block';
         }
-      }
-    });
-  }
-
-    // Re-evaluate on any user interaction
-    form.addEventListener('change', updateVisibility);
-    form.addEventListener('input',  updateVisibility);
-
-    // Run once on load to handle pre-filled answers
-    updateVisibility();
-  });
-  document.addEventListener('DOMContentLoaded', updateConditionalQuestions);
-
-  const form = document.getElementById('dynamicForm');
-  if (form) {
+      });
+    }
     form.addEventListener('change', updateConditionalQuestions);
     form.addEventListener('input',  updateConditionalQuestions);
-  }
+    updateConditionalQuestions();
+  });
 </script>
 
 <%- include('partials/footer') %>

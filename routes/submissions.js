@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/db');
@@ -18,7 +17,7 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /submissions/:uuid/thankyou — Thank you page ─────────────────────────
+// ── GET /submissions/:uuid/thankyou — MUST be before /:uuid ──────────────────
 router.get('/:uuid/thankyou', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -33,7 +32,7 @@ router.get('/:uuid/thankyou', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /submissions/:uuid — View a single submission ─────────────────────────
+// ── GET /submissions/:uuid — View a single submission ────────────────────────
 router.get('/:uuid', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -47,20 +46,27 @@ router.get('/:uuid', async (req, res, next) => {
 
     const submission = rows[0];
 
+    // ✅ Ensure answers is always a parsed object, not a raw string
+    if (typeof submission.answers === 'string') {
+      try { submission.answers = JSON.parse(submission.answers); }
+      catch { submission.answers = {}; }
+    }
+    submission.answers = submission.answers || {};
+
     const { rows: images } = await pool.query(
-      'SELECT * FROM submission_images WHERE submission_id=$1 ORDER BY uploaded_at',
+      'SELECT * FROM submission_images WHERE submission_id = $1 ORDER BY uploaded_at',
       [submission.id]
     );
 
     // Load question labels for the answers
     const { rows: questions } = await pool.query(
-      'SELECT id, question_text FROM questions WHERE category_id=$1',
+      'SELECT id, question_text FROM questions WHERE category_id = $1 ORDER BY group_index, order_index',
       [submission.category_id]
     );
     const labelMap = {};
     questions.forEach(q => { labelMap[String(q.id)] = q.question_text; });
 
-    res.render('submissions/detail', { submission, images, labelMap });
+    res.render('submissions/details', { submission, images, labelMap });
   } catch (err) { next(err); }
 });
 

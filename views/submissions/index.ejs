@@ -25,7 +25,7 @@
         <td><%= new Date(sub.submitted_at).toLocaleString() %></td>
         <td><span class="badge"><%= sub.image_count %></span></td>
         <td>
-          <a href="/submissions/<%= sub.submission_uuid %>/details" class="btn btn-sm btn-secondary">View Details</a>
+          <a href="/submissions/<%= sub.submission_uuid %>" class="btn btn-sm btn-secondary">View Details</a>
         </td>
       </tr>
       <% }) %>

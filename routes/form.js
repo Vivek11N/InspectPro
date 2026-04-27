@@ -8,17 +8,26 @@ const pool    = require('../db/db');
 // ── Helper: safely parse answers from any source ─────────────────────────────
 function parseAnswers(raw) {
   if (!raw) return {};
-  try {
-    // Try direct JSON parse first
-    return JSON.parse(raw);
-  } catch (e) {
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    // ✅ Decode HTML entities before parsing (handles &quot; &amp; etc.)
+    const decoded = raw
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&')
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>');
     try {
-      // If that fails, try decoding first then parsing
-      return JSON.parse(decodeURIComponent(raw));
-    } catch (e2) {
-      return {};
+      return JSON.parse(decoded);
+    } catch {
+      try {
+        return JSON.parse(decodeURIComponent(decoded));
+      } catch {
+        return {};
+      }
     }
   }
+  return {};
 }
 
 // ── Multer setup ──────────────────────────────────────────────────────────────
@@ -44,7 +53,7 @@ const upload = multer({
   },
 });
 
-// ── GET /image/:id — Serve image binary directly from PostgreSQL ──────────────
+// ── GET /image/:id — Serve image binary from PostgreSQL ──────────────────────
 router.get('/image/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
@@ -76,7 +85,9 @@ router.get('/form/:slug', async (req, res, next) => {
     const group    = parseInt(req.query.group) || 1;
     const answers  = parseAnswers(req.query.answers);
 
-    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
+    const { rows: cats } = await pool.query(
+      'SELECT * FROM categories WHERE slug = $1', [slug]
+    );
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
     const category = cats[0];
 
@@ -85,32 +96,35 @@ router.get('/form/:slug', async (req, res, next) => {
       [category.id]
     );
 
-    // Add this — normalise options to always be a JSON string
-const normalised = allQuestions.map(q => {
-  if (q.options && typeof q.options !== 'string') {
-    q.options = JSON.stringify(q.options); // pg returned object → convert back to string
-  }
-  return q;
-});
+    // Normalise options to always be a JSON string for the template
+    const normalisedQuestions = allQuestions.map(q => {
+      if (q.options && typeof q.options !== 'string') {
+        q.options = JSON.stringify(q.options);
+      }
+      return q;
+    });
 
-    const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
+    const maxGroup = normalisedQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
 
-    const groupQuestions = allQuestions.filter(q => {
+    const groupQuestions = normalisedQuestions.filter(q => {
       if (q.group_index !== group) return false;
-      // If question has conditional logic, check if condition is met
+      // Apply conditional logic if present
       if (q.conditional_on_question_id && q.conditional_on_value) {
         const linkedAnswer = answers[String(q.conditional_on_question_id)];
-        // Compare as strings, case-insensitive
         return String(linkedAnswer || '').trim().toLowerCase() ===
                String(q.conditional_on_value || '').trim().toLowerCase();
       }
-      // If no conditional, include the question
       return true;
     });
 
     res.render('form', {
-      category, questions: groupQuestions, group,
-      maxGroup, isLastGroup: group >= maxGroup, answers, slug,
+      category,
+      questions: groupQuestions,
+      group,
+      maxGroup,
+      isLastGroup: group >= maxGroup,
+      answers,
+      slug,
     });
   } catch (err) { next(err); }
 });
@@ -122,12 +136,15 @@ router.post('/form/:slug/step', async (req, res, next) => {
     const group       = parseInt(req.body._group) || 1;
     const prevAnswers = parseAnswers(req.body._answers);
 
+    // Merge previous answers with this step's answers (strip internal fields)
     const stepAnswers = { ...req.body };
     delete stepAnswers._group;
     delete stepAnswers._answers;
     const answers = { ...prevAnswers, ...stepAnswers };
 
-    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
+    const { rows: cats } = await pool.query(
+      'SELECT * FROM categories WHERE slug = $1', [slug]
+    );
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
     const { rows: allQuestions } = await pool.query(
@@ -135,8 +152,7 @@ router.post('/form/:slug/step', async (req, res, next) => {
       [cats[0].id]
     );
 
-    const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
-    // Store answers as plain JSON string (not URL encoded) in hidden field
+    const maxGroup    = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
     const answersJson = JSON.stringify(answers);
 
     if (group + 1 > maxGroup) {
@@ -152,35 +168,50 @@ router.get('/form/:slug/images', async (req, res, next) => {
     const { slug } = req.params;
     const answers  = parseAnswers(req.query.answers);
 
-    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
+    const { rows: cats } = await pool.query(
+      'SELECT * FROM categories WHERE slug = $1', [slug]
+    );
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
-    // Pass answers as plain JSON string to the view (not URL encoded)
-    res.render('images', { category: cats[0], answers, slug, answersJson: JSON.stringify(answers) });
+    res.render('images', {
+      category:    cats[0],
+      answers,
+      slug,
+      // ✅ Pass as plain JSON string — use <%- in template to avoid HTML escaping
+      answersJson: JSON.stringify(answers),
+    });
   } catch (err) { next(err); }
 });
 
-// ── POST /form/:slug/submit — Save submission + images (disk + DB BYTEA) ──────
+// ── POST /form/:slug/submit — Save submission + images ────────────────────────
 router.post('/form/:slug/submit', upload.array('images', 10), async (req, res, next) => {
   const client = await pool.connect();
   try {
     const { slug } = req.params;
-    // _answers is now plain JSON (not URL encoded) from the hidden input
-    const answers  = parseAnswers(req.body._answers);
 
-    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
+    // ✅ _answers comes from hidden input as plain JSON string
+    const answers = parseAnswers(req.body._answers);
+
+    // Debug log — remove once confirmed working
+    console.log('[submit] RAW _answers:', req.body._answers);
+    console.log('[submit] PARSED answers:', answers);
+
+    const { rows: cats } = await pool.query(
+      'SELECT * FROM categories WHERE slug = $1', [slug]
+    );
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
     await client.query('BEGIN');
 
     const { rows: sub } = await client.query(
       `INSERT INTO form_submissions (category_id, answers)
-       VALUES ($1, $2) RETURNING id, submission_uuid`,
+       VALUES ($1, $2::jsonb) RETURNING id, submission_uuid`,
       [cats[0].id, JSON.stringify(answers)]
     );
     const submissionId   = sub[0].id;
     const submissionUuid = sub[0].submission_uuid;
 
+    // Save images to DB as BYTEA
     if (req.files && req.files.length) {
       for (const file of req.files) {
         const imageBuffer = fs.readFileSync(file.path);
@@ -190,6 +221,8 @@ router.post('/form/:slug/submit', upload.array('images', 10), async (req, res, n
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [submissionId, file.filename, file.originalname, file.mimetype, file.size, imageBuffer]
         );
+        // Clean up temp file from disk after saving to DB
+        fs.unlink(file.path, () => {});
       }
     }
 
