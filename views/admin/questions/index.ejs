@@ -26,9 +26,9 @@
         <th>Group</th>
         <th>Order</th>
         <th>Question</th>
-        <th>Field Name</th>
+        
         <th>Type</th>
-        <th>Conditional</th>
+        
         <th>Required</th>
         <th>Actions</th>
       </tr>
@@ -39,13 +39,9 @@
         <td><span class="badge"><%= q.group_index %></span></td>
         <td><%= q.order_index %></td>
         <td><%= q.question_text %></td>
-        <td><code><%= q.id %></code></td>
+       
         <td><span class="type-badge type-<%= q.field_type %>"><%= q.field_type %></span></td>
-        <td>
-          <% if(q.conditional_on_field) { %>
-            <small>if <code><%= q.conditional_on_field %></code> = <em><%= q.conditional_on_value %></em></small>
-          <% } else { %> — <% } %>
-        </td>
+        
         <td><%= q.is_required ? '✔' : '—' %></td>
         <td class="action-cell">
           <a href="/admin/questions/<%= q.id %>/edit" class="btn btn-sm btn-secondary">Edit</a>
