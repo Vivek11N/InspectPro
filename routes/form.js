@@ -85,17 +85,24 @@ router.get('/form/:slug', async (req, res, next) => {
       [category.id]
     );
 
+    // Add this — normalise options to always be a JSON string
+const normalised = allQuestions.map(q => {
+  if (q.options && typeof q.options !== 'string') {
+    q.options = JSON.stringify(q.options); // pg returned object → convert back to string
+  }
+  return q;
+});
+
     const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
 
     const groupQuestions = allQuestions.filter(q => {
       if (q.group_index !== group) return false;
       // If question has conditional logic, check if condition is met
-      if (q.conditional_on_field && q.conditional_on_value) {
-        const fieldValue = answers[q.conditional_on_field];
-        const conditionValue = q.conditional_on_value;
+      if (q.conditional_on_question_id && q.conditional_on_value) {
+        const linkedAnswer = answers[String(q.conditional_on_question_id)];
         // Compare as strings, case-insensitive
-        return String(fieldValue || '').trim().toLowerCase() ===
-               String(conditionValue || '').trim().toLowerCase();
+        return String(linkedAnswer || '').trim().toLowerCase() ===
+               String(q.conditional_on_value || '').trim().toLowerCase();
       }
       // If no conditional, include the question
       return true;

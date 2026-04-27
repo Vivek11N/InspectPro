@@ -54,11 +54,11 @@ router.get('/:uuid', async (req, res, next) => {
 
     // Load question labels for the answers
     const { rows: questions } = await pool.query(
-      'SELECT field_name, question_text FROM questions WHERE category_id=$1',
+      'SELECT id, question_text FROM questions WHERE category_id=$1',
       [submission.category_id]
     );
     const labelMap = {};
-    questions.forEach(q => { labelMap[q.field_name] = q.question_text; });
+    questions.forEach(q => { labelMap[String(q.id)] = q.question_text; });
 
     res.render('submissions/detail', { submission, images, labelMap });
   } catch (err) { next(err); }
