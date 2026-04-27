@@ -111,3 +111,52 @@
 <% } %>
 
 <%- include('partials/footer') %>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Gather all question blocks and their conditions
+    const questionBlocks = Array.from(document.querySelectorAll('.question-block'));
+    // Build a map of field_name to block and condition
+    const fieldMap = {};
+    questionBlocks.forEach(block => {
+      const field = block.getAttribute('data-field');
+      fieldMap[field] = block;
+      // Attach condition info if present
+      block.conditionalField = block.getAttribute('data-conditional-field');
+      block.conditionalValue = block.getAttribute('data-conditional-value');
+    });
+
+    // Helper: get current value for a field
+    function getFieldValue(field) {
+      const input = document.querySelector(`[name="${field}"]`);
+      if (!input) return '';
+      if (input.type === 'radio') {
+        const checked = document.querySelector(`[name="${field}"]:checked`);
+        return checked ? checked.value : '';
+      }
+      return input.value;
+    }
+
+    // Show/hide questions based on conditions
+    function updateVisibility() {
+      questionBlocks.forEach(block => {
+        const condField = block.conditionalField;
+        const condValue = block.conditionalValue;
+        if (condField && condValue) {
+          const actual = getFieldValue(condField);
+          if (actual.trim().toLowerCase() === condValue.trim().toLowerCase()) {
+            block.style.display = '';
+          } else {
+            block.style.display = 'none';
+          }
+        } else {
+          block.style.display = '';
+        }
+      });
+    }
+
+    // Listen for changes on all inputs
+    document.getElementById('questionForm').addEventListener('input', updateVisibility);
+    // Initial update
+    updateVisibility();
+  });
+</script>

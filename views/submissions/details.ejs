@@ -13,13 +13,17 @@
 <section class="detail-section">
   <h2>Answers</h2>
   <dl class="answers-list">
-    <% const ans = submission.answers; %>
-    <% Object.keys(ans).forEach(key => { %>
-    <div class="answer-row">
-      <dt><%= labelMap[key] || key %></dt>
-      <dd><%= ans[key] || '—' %></dd>
-    </div>
-    <% }) %>
+    <% const ans = submission.answers || {}; %>
+    <% if (ans && Object.keys(ans).length > 0) { %>
+      <% Object.keys(ans).forEach(key => { %>
+      <div class="answer-row">
+        <dt><%= labelMap[key] || key %></dt>
+        <dd><%= ans[key] || '—' %></dd>
+      </div>
+      <% }) %>
+    <% } else { %>
+      <p>No answers recorded.</p>
+    <% } %>
   </dl>
 </section>
 

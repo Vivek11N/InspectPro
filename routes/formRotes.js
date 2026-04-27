@@ -9,11 +9,9 @@ const pool    = require('../db/db');
 function parseAnswers(raw) {
   if (!raw) return {};
   try {
-    // Try direct JSON parse first
     return JSON.parse(raw);
   } catch (e) {
     try {
-      // If that fails, try decoding first then parsing
       return JSON.parse(decodeURIComponent(raw));
     } catch (e2) {
       return {};
@@ -87,19 +85,11 @@ router.get('/form/:slug', async (req, res, next) => {
 
     const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
 
-    const groupQuestions = allQuestions.filter(q => {
-      if (q.group_index !== group) return false;
-      // If question has conditional logic, check if condition is met
-      if (q.conditional_on_field && q.conditional_on_value) {
-        const fieldValue = answers[q.conditional_on_field];
-        const conditionValue = q.conditional_on_value;
-        // Compare as strings, case-insensitive
-        return String(fieldValue || '').trim().toLowerCase() ===
-               String(conditionValue || '').trim().toLowerCase();
-      }
-      // If no conditional, include the question
-      return true;
-    });
+    // ✅ Send ALL questions for this group to the frontend.
+    // Conditional show/hide is handled by JavaScript in form.ejs.
+    // We no longer filter here — filtering on the server prevented conditional
+    // questions on the same step from ever reaching the browser.
+    const groupQuestions = allQuestions.filter(q => q.group_index === group);
 
     res.render('form', {
       category, questions: groupQuestions, group,
@@ -129,7 +119,6 @@ router.post('/form/:slug/step', async (req, res, next) => {
     );
 
     const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
-    // Store answers as plain JSON string (not URL encoded) in hidden field
     const answersJson = JSON.stringify(answers);
 
     if (group + 1 > maxGroup) {
@@ -148,7 +137,6 @@ router.get('/form/:slug/images', async (req, res, next) => {
     const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
-    // Pass answers as plain JSON string to the view (not URL encoded)
     res.render('images', { category: cats[0], answers, slug, answersJson: JSON.stringify(answers) });
   } catch (err) { next(err); }
 });
@@ -158,7 +146,6 @@ router.post('/form/:slug/submit', upload.array('images', 10), async (req, res, n
   const client = await pool.connect();
   try {
     const { slug } = req.params;
-    // _answers is now plain JSON (not URL encoded) from the hidden input
     const answers  = parseAnswers(req.body._answers);
 
     const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);

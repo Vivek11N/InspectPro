@@ -2,6 +2,36 @@ const express = require('express');
 const router  = express.Router();
 const pool    = require('../db/db');
 
+// ── Helper: normalise options from DB to a JS array ──────────────────────────
+// Handles three formats that may exist in the DB:
+//   • proper JSON array  →  '["A","B"]'
+//   • plain CSV string   →  'A,B,C'
+//   • null / empty
+function parseOptions(raw) {
+  if (!raw) return null;
+  if (typeof raw !== 'string') return raw; // already parsed by pg driver
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed);
+    // Make sure it really is an array
+    return Array.isArray(parsed) ? parsed : [String(parsed)];
+  } catch {
+    // Fall back: treat as comma-separated
+    return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+  }
+}
+
+// Apply normalisation to every question row coming out of the DB.
+// After this call, q.options is ALWAYS either null or a valid JSON string.
+function normaliseQuestions(rows) {
+  return rows.map(q => {
+    const arr = parseOptions(q.options);
+    q.options = arr ? JSON.stringify(arr) : null;
+    return q;
+  });
+}
+
 // ── GET /admin/questions — List all questions ─────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
@@ -12,7 +42,7 @@ router.get('/', async (req, res, next) => {
        JOIN categories c ON c.id = q.category_id
        ORDER BY c.id, q.group_index, q.order_index`
     );
-    res.render('admin/questions/index', { categories, questions });
+    res.render('admin/questions/index', { categories, questions: normaliseQuestions(questions) });
   } catch (err) { next(err); }
 });
 
@@ -25,7 +55,7 @@ router.get('/new', async (req, res, next) => {
     );
     res.render('admin/questions/form', {
       categories,
-      allQuestions,
+      allQuestions: normaliseQuestions(allQuestions),
       question: null,
       action: '/admin/questions',
       method: 'POST',
@@ -70,11 +100,14 @@ router.get('/:id/edit', async (req, res, next) => {
     const { rows }             = await pool.query('SELECT * FROM questions WHERE id=$1', [req.params.id]);
     if (!rows.length) return res.status(404).render('error', { message: 'Question not found' });
 
-    const question = rows[0];
-    // Convert options JSON array back to newline-separated text for the textarea
+    const [question] = normaliseQuestions(rows);
+
+    // Build newline-separated text for the textarea from the now-clean JSON
     if (question.options) {
       try { question.options_raw = JSON.parse(question.options).join('\n'); }
       catch { question.options_raw = ''; }
+    } else {
+      question.options_raw = '';
     }
 
     const { rows: allQuestions } = await pool.query(
@@ -84,7 +117,7 @@ router.get('/:id/edit', async (req, res, next) => {
 
     res.render('admin/questions/form', {
       categories,
-      allQuestions,
+      allQuestions: normaliseQuestions(allQuestions),
       question,
       action: `/admin/questions/${question.id}?_method=PUT`,
       method: 'POST',
@@ -95,7 +128,6 @@ router.get('/:id/edit', async (req, res, next) => {
 // ── POST /admin/questions/:id?_method=PUT — Update question ───────────────────
 router.post('/:id', async (req, res, next) => {
   try {
-    // Support ?_method=PUT override
     const {
       category_id, question_text, field_name, field_type,
       options_raw, order_index, group_index,

@@ -40,20 +40,28 @@
       <label>Field Type <span class="required">*</span></label>
       <select name="field_type" class="form-input" required id="fieldType">
         <option value="">— Select Type —</option>
-        <option value="text" <%= (question && question.field_type === 'text') ? 'selected' : '' %>>Text Input</option>
+        <option value="text"     <%= (question && question.field_type === 'text')     ? 'selected' : '' %>>Text Input</option>
         <option value="textarea" <%= (question && question.field_type === 'textarea') ? 'selected' : '' %>>Text Area</option>
-        <option value="number" <%= (question && question.field_type === 'number') ? 'selected' : '' %>>Number</option>
-        <option value="yesno" <%= (question && question.field_type === 'yesno') ? 'selected' : '' %>>Yes / No</option>
-        <option value="select" <%= (question && question.field_type === 'select') ? 'selected' : '' %>>Dropdown</option>
-        <option value="radio" <%= (question && question.field_type === 'radio') ? 'selected' : '' %>>Radio Buttons</option>
+        <option value="number"   <%= (question && question.field_type === 'number')   ? 'selected' : '' %>>Number</option>
+        <option value="yesno"    <%= (question && question.field_type === 'yesno')    ? 'selected' : '' %>>Yes / No</option>
+        <option value="select"   <%= (question && question.field_type === 'select')   ? 'selected' : '' %>>Dropdown</option>
+        <option value="radio"    <%= (question && question.field_type === 'radio')    ? 'selected' : '' %>>Radio Buttons</option>
       </select>
     </div>
   </div>
 
+  <%
+    /* Safe helper: options is already a clean JSON string from the route,
+       so JSON.parse is safe here. options_raw is the newline-separated
+       version already built by the route for the edit case. */
+    const _optsDisplay = (question && question.options_raw)
+      ? question.options_raw
+      : '';
+  %>
   <div class="form-group" id="optionsGroup" style="display: none;">
     <label>Options (one per line) <span class="required">*</span></label>
     <textarea name="options_raw" class="form-input form-textarea" rows="4"
-              placeholder="Option A&#10;Option B&#10;Option C"><% if (question && question.options) { %><% const opts = JSON.parse(question.options); %><%- opts.join('\n') %><% } %></textarea>
+              placeholder="Option A&#10;Option B&#10;Option C"><%- _optsDisplay %></textarea>
   </div>
 
   <div class="form-row">
@@ -75,7 +83,7 @@
     <p style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem;">
       Show this question only when another question has a specific answer.
     </p>
-    
+
     <div class="form-row">
       <div class="form-group">
         <label>Show When This Question</label>
@@ -83,7 +91,8 @@
           <option value="">— None (Always Show) —</option>
           <% if (allQuestions && allQuestions.length > 0) { %>
             <% allQuestions.forEach(q => { %>
-              <option value="<%= q.field_name %>" <%= (question && question.conditional_on_field === q.field_name) ? 'selected' : '' %>>
+              <option value="<%= q.field_name %>"
+                <%= (question && question.conditional_on_field === q.field_name) ? 'selected' : '' %>>
                 <%= q.question_text %> (field: <%= q.field_name %>)
               </option>
             <% }) %>
@@ -107,7 +116,8 @@
 
   <div class="form-group">
     <label class="checkbox-label">
-      <input type="checkbox" name="is_required" <%= (question && question.is_required) ? 'checked' : '' %> />
+      <input type="checkbox" name="is_required"
+             <%= (question && question.is_required) ? 'checked' : '' %> />
       Required
     </label>
   </div>
@@ -122,61 +132,90 @@
 </form>
 
 <script>
-  const fieldTypeSelect = document.getElementById('fieldType');
-  const optionsGroup = document.getElementById('optionsGroup');
-  const conditionalField = document.getElementById('conditionalField');
-  const conditionalValue = document.getElementById('conditionalValue');
-  const conditionalValueSelect = document.getElementById('conditionalValueSelect');
-  
-  // Map of field_name to options for dropdowns
-  const questionOptions = {
-    <% if (allQuestions && allQuestions.length > 0) { %>
-      <% allQuestions.forEach((q, idx) => { %>
-        '<%= q.field_name %>': <%= q.options ? JSON.stringify(JSON.parse(q.options)) : (q.field_type === 'yesno' ? '["Yes", "No"]' : '[]') %><%= idx < allQuestions.length - 1 ? ',' : '' %>
-      <% }) %>
-    <% } %>
-  };
-  
-  function toggleOptionsField() {
-    const value = fieldTypeSelect.value;
-    if (value === 'select' || value === 'radio') {
-      optionsGroup.style.display = 'block';
-      optionsGroup.querySelector('textarea').required = true;
-    } else {
-      optionsGroup.style.display = 'none';
-      optionsGroup.querySelector('textarea').required = false;
+  document.addEventListener('DOMContentLoaded', function () {
+    try {
+      const fieldTypeSelect        = document.getElementById('fieldType');
+      const optionsGroup           = document.getElementById('optionsGroup');
+      const conditionalField       = document.getElementById('conditionalField');
+      const conditionalValue       = document.getElementById('conditionalValue');
+      const conditionalValueSelect = document.getElementById('conditionalValueSelect');
+
+      if (!fieldTypeSelect || !optionsGroup || !conditionalField) {
+        console.error('Required form elements not found');
+        return;
+      }
+
+      const optionsTextarea = optionsGroup.querySelector('textarea');
+
+      /*
+       * questionOptions is built server-side from already-normalised data.
+       * Every q.options value is either null or a valid JSON array string,
+       * so JSON.parse here is always safe.
+       */
+      const questionOptions = {
+        <% if (allQuestions && allQuestions.length > 0) { %>
+          <% allQuestions.forEach((q, idx) => {
+               let opts;
+               if (q.options) {
+                 // options is guaranteed clean JSON by the route
+                 opts = q.options;
+               } else if (q.field_type === 'yesno') {
+                 opts = '["Yes","No"]';
+               } else {
+                 opts = '[]';
+               }
+          %>
+            '<%= q.field_name %>': <%- opts %><%= idx < allQuestions.length - 1 ? ',' : '' %>
+          <% }) %>
+        <% } %>
+      };
+
+      function toggleOptionsField() {
+        const val = fieldTypeSelect.value;
+        const show = val === 'select' || val === 'radio';
+        optionsGroup.style.display = show ? 'block' : 'none';
+        if (optionsTextarea) optionsTextarea.required = show;
+      }
+
+      function updateConditionalValueOptions() {
+        const selectedField = conditionalField.value;
+        const options = questionOptions[selectedField] || [];
+
+        if (options.length > 0) {
+          let html = '<option value="">— Select Value —</option>';
+          options.forEach(opt => {
+            html += `<option value="${opt}">${opt}</option>`;
+          });
+          conditionalValueSelect.innerHTML = html;
+          conditionalValueSelect.style.display = 'block';
+          conditionalValue.style.display = 'none';
+
+          if (conditionalValue.value) {
+            conditionalValueSelect.value = conditionalValue.value;
+          }
+        } else {
+          conditionalValueSelect.style.display = 'none';
+          conditionalValue.style.display = 'block';
+        }
+      }
+
+      function syncConditionalValue() {
+        if (conditionalValueSelect.style.display !== 'none' && conditionalValueSelect.value) {
+          conditionalValue.value = conditionalValueSelect.value;
+        }
+      }
+
+      fieldTypeSelect.addEventListener('change', toggleOptionsField);
+      conditionalField.addEventListener('change', updateConditionalValueOptions);
+      conditionalValueSelect.addEventListener('change', syncConditionalValue);
+
+      toggleOptionsField();
+      updateConditionalValueOptions();
+
+    } catch (error) {
+      console.error('Error initializing form:', error);
     }
-  }
-  
-  function updateConditionalValueOptions() {
-    const selectedField = conditionalField.value;
-    const options = questionOptions[selectedField] || [];
-    
-    if (options.length > 0) {
-      conditionalValueSelect.innerHTML = '<option value="">— Select Value —</option>' + 
-        options.map(opt => `<option value="${opt}">${opt}</option>`).join('');
-      conditionalValueSelect.style.display = 'block';
-      conditionalValue.style.display = 'none';
-    } else {
-      conditionalValueSelect.style.display = 'none';
-      conditionalValue.style.display = 'block';
-    }
-  }
-  
-  function syncConditionalValue() {
-    if (conditionalValueSelect.style.display !== 'none') {
-      conditionalValue.value = conditionalValueSelect.value;
-    } else {
-      conditionalValue.value = conditionalValue.value;
-    }
-  }
-  
-  fieldTypeSelect.addEventListener('change', toggleOptionsField);
-  conditionalField.addEventListener('change', updateConditionalValueOptions);
-  conditionalValueSelect.addEventListener('change', syncConditionalValue);
-  
-  toggleOptionsField();
-  updateConditionalValueOptions();
+  });
 </script>
 
 <%- include('../../partials/footer') %>
