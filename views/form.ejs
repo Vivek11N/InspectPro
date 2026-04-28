@@ -23,12 +23,41 @@
 
 <form method="POST" action="/form/<%= slug %>/step" class="question-form" id="dynamicForm">
   <input type="hidden" name="_group" value="<%= group %>">
-  <input type="hidden" name="_answers" value="<%= encodeURIComponent(JSON.stringify(answers)) %>">
-  
+  <%
+    // encodeURIComponent so quotes and braces survive the POST body intact
+    var answersEncoded = encodeURIComponent(JSON.stringify(answers));
+  %>
+  <input type="hidden" name="_answers" value="<%= answersEncoded %>">
+
+  <% if (group === 1) { %>
+    <div class="question-block">
+      <label class="question-label" for="location_select">
+        Location <span class="required">*</span>
+      </label>
+      <% if (locations && locations.length > 0) { %>
+        <select name="_location_id" id="location_select" class="form-input" required>
+          <option value="">— Select Location —</option>
+          <% locations.forEach(function(loc) { %>
+            <option value="<%= loc.id %>"
+              <%= String(locationId) === String(loc.id) ? 'selected' : '' %>>
+              <%= loc.name %>
+            </option>
+          <% }) %>
+        </select>
+      <% } else { %>
+        <p style="color: var(--muted); font-size: 0.9rem;">
+          No locations available. Please contact an administrator.
+        </p>
+      <% } %>
+    </div>
+  <% } else { %>
+    <input type="hidden" name="_location_id" value="<%= locationId %>">
+  <% } %>
+
   <% if (questions && questions.length > 0) { %>
-    <% questions.forEach(q => { %>
-      <div class="question-block" id="block_<%= q.id %>" 
-           data-condition-question="<%= q.conditional_on_question_id || '' %>" 
+    <% questions.forEach(function(q) { %>
+      <div class="question-block" id="block_<%= q.id %>"
+           data-condition-question="<%= q.conditional_on_question_id || '' %>"
            data-condition-value="<%= q.conditional_on_value || '' %>">
         <label class="question-label" for="q_<%= q.id %>">
           <%= q.question_text %>
@@ -67,14 +96,14 @@
           <select id="q_<%= q.id %>" name="<%= q.id %>" class="form-input"
                   <%= q.is_required ? 'required' : '' %>>
             <option value="">-- Select --</option>
-            <% safeOptions(q.options).forEach(opt => { %>
+            <% safeOptions(q.options).forEach(function(opt) { %>
               <option value="<%= opt %>" <%= answers[String(q.id)] === opt ? 'selected' : '' %>><%= opt %></option>
             <% }) %>
           </select>
 
         <% } else if (q.field_type === 'radio' && q.options) { %>
           <div class="radio-group">
-            <% safeOptions(q.options).forEach(opt => { %>
+            <% safeOptions(q.options).forEach(function(opt) { %>
               <label class="radio-option">
                 <input type="radio" name="<%= q.id %>" value="<%= opt %>"
                        <%= answers[String(q.id)] === opt ? 'checked' : '' %>
@@ -97,31 +126,32 @@
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('dynamicForm');
+    var form = document.getElementById('dynamicForm');
     if (!form) return;
+
     function updateConditionalQuestions() {
-      const blocks = form.querySelectorAll('.question-block');
-      blocks.forEach(block => {
-        const conditionQuestion = block.dataset.conditionQuestion; // question ID
-        const conditionValue    = block.dataset.conditionValue;
+      var blocks = form.querySelectorAll('.question-block');
+      blocks.forEach(function(block) {
+        var conditionQuestion = block.dataset.conditionQuestion;
+        var conditionValue    = block.dataset.conditionValue;
+
         if (conditionQuestion && conditionValue) {
-          // Find the input whose name equals the condition question ID
-          const input = form.querySelector(
-            `input[name="${conditionQuestion}"], select[name="${conditionQuestion}"], textarea[name="${conditionQuestion}"]`
+          var input = form.querySelector(
+            'input[name="' + conditionQuestion + '"], select[name="' + conditionQuestion + '"], textarea[name="' + conditionQuestion + '"]'
           );
           if (input) {
-            let value = '';
+            var value = '';
             if (input.type === 'radio' || input.type === 'checkbox') {
-              const checked = form.querySelector(`input[name="${conditionQuestion}"]:checked`);
+              var checked = form.querySelector('input[name="' + conditionQuestion + '"]:checked');
               value = checked ? checked.value : '';
             } else {
               value = input.value;
             }
-            const matches = String(value).toLowerCase() === String(conditionValue).toLowerCase();
+            var matches = String(value).toLowerCase() === String(conditionValue).toLowerCase();
             block.style.display = matches ? 'block' : 'none';
-            // Toggle required attribute so hidden fields don't block form submit
-            const requiredInputs = block.querySelectorAll('input[required], select[required], textarea[required]');
-            requiredInputs.forEach(inp => {
+
+            var requiredInputs = block.querySelectorAll('input[required], select[required], textarea[required]');
+            requiredInputs.forEach(function(inp) {
               if (!matches) {
                 inp.removeAttribute('required');
               } else {
@@ -134,6 +164,7 @@
         }
       });
     }
+
     form.addEventListener('change', updateConditionalQuestions);
     form.addEventListener('input',  updateConditionalQuestions);
     updateConditionalQuestions();

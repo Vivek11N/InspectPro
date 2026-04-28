@@ -5,7 +5,7 @@ const multer     = require('multer');
 
 const app = express();
 
-// ── View engine ──────────────────────────────────────────────────────────────
+// ── View engine ───────────────────────────────────────────────────────────────
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -16,13 +16,15 @@ app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
-const formRoutes      = require('./routes/form');
-const questionRoutes  = require('./routes/questions');
-const submissionRoutes = require('./routes/submissions');
+const formRoutes        = require('./routes/form');
+const questionRoutes    = require('./routes/questions');
+const submissionRoutes  = require('./routes/submissions');
+const adminRoutes       = require('./routes/admin');       // ← NEW
 
-app.use('/',           formRoutes);
-app.use('/admin/questions', questionRoutes);
-app.use('/submissions',     submissionRoutes);
+app.use('/',                  formRoutes);
+app.use('/admin/questions',   questionRoutes);
+app.use('/admin',             adminRoutes);               // ← NEW
+app.use('/submissions',       submissionRoutes);
 
 // ── 404 ───────────────────────────────────────────────────────────────────────
 app.use((req, res) => {

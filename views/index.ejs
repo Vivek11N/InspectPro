@@ -1,16 +1,20 @@
 <%- include('partials/header', { title: 'Choose Inspection Category' }) %>
 <div class="page-header">
-  <h1>Choose Inspection Category</h1>
+  <h1>Welcome To InspectionPro</h1>
 </div>
 
 <div class="category-grid">
   <% if (categories && categories.length > 0) { %>
     <% categories.forEach(cat => { %>
       <a href="/form/<%= cat.slug %>" class="category-card">
-        <div class="cat-icon">🏷️</div>
-        <h2><%= cat.name %></h2>
-        <p><%= cat.description %></p>
-      </a>
+       
+  <div class="cat-image">
+    <img src="<%= cat.image_url %>" alt="<%= cat.name %>">
+  </div>
+  <h2><%= cat.name %></h2>
+  <p><%= cat.description %></p>
+</a>
+    
     <% }) %>
   <% } else { %>
     <div class="alert alert-info">No categories found.</div>

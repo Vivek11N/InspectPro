@@ -36,12 +36,13 @@ router.get('/:uuid/thankyou', async (req, res, next) => {
 router.get('/:uuid', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
-      `SELECT fs.*, c.name AS category_name
-       FROM form_submissions fs
-       JOIN categories c ON c.id = fs.category_id
-       WHERE fs.submission_uuid = $1`,
-      [req.params.uuid]
-    );
+  `SELECT fs.*, c.name AS category_name, l.name AS location_name
+   FROM form_submissions fs
+   JOIN categories c ON c.id = fs.category_id
+   LEFT JOIN locations l ON l.id = fs.location_id
+   WHERE fs.submission_uuid = $1`,
+  [req.params.uuid]
+);
     if (!rows.length) return res.status(404).render('error', { message: 'Submission not found' });
 
     const submission = rows[0];

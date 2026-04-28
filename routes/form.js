@@ -5,28 +5,20 @@ const path    = require('path');
 const fs      = require('fs');
 const pool    = require('../db/db');
 
-// ── Helper: safely parse answers from any source ─────────────────────────────
+// ── parseAnswers: handles encoded, double-encoded, and plain JSON ─────────────
 function parseAnswers(raw) {
   if (!raw) return {};
-  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
-  if (typeof raw === 'string') {
-    // ✅ Decode HTML entities before parsing (handles &quot; &amp; etc.)
-    const decoded = raw
-      .replace(/&quot;/g, '"')
-      .replace(/&amp;/g, '&')
-      .replace(/&#39;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
-    try {
-      return JSON.parse(decoded);
-    } catch {
-      try {
-        return JSON.parse(decodeURIComponent(decoded));
-      } catch {
-        return {};
-      }
-    }
-  }
+  if (typeof raw === 'object') return raw;
+
+  // Attempt 1: plain JSON (what we get from query string after express decodes it)
+  try { return JSON.parse(raw); } catch {}
+
+  // Attempt 2: decode once then parse
+  try { return JSON.parse(decodeURIComponent(raw)); } catch {}
+
+  // Attempt 3: decode twice then parse (double-encoded)
+  try { return JSON.parse(decodeURIComponent(decodeURIComponent(raw))); } catch {}
+
   return {};
 }
 
@@ -53,16 +45,15 @@ const upload = multer({
   },
 });
 
-// ── GET /image/:id — Serve image binary from PostgreSQL ──────────────────────
+// ── GET /image/:id ────────────────────────────────────────────────────────────
 router.get('/image/:id', async (req, res, next) => {
   try {
     const { rows } = await pool.query(
       'SELECT image_data, mimetype, original_name FROM submission_images WHERE id = $1',
       [req.params.id]
     );
-    if (!rows.length || !rows[0].image_data) {
+    if (!rows.length || !rows[0].image_data)
       return res.status(404).send('Image not found in database');
-    }
     const img = rows[0];
     res.setHeader('Content-Type', img.mimetype || 'image/jpeg');
     res.setHeader('Content-Disposition', `inline; filename="${img.original_name}"`);
@@ -70,7 +61,7 @@ router.get('/image/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET / — Category selection page ──────────────────────────────────────────
+// ── GET / — Category selection ────────────────────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
     const { rows: categories } = await pool.query('SELECT * FROM categories ORDER BY id');
@@ -78,16 +69,15 @@ router.get('/', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// ── GET /form/:slug — Show questions for a step ───────────────────────────────
+// ── GET /form/:slug ───────────────────────────────────────────────────────────
 router.get('/form/:slug', async (req, res, next) => {
   try {
     const { slug } = req.params;
     const group    = parseInt(req.query.group) || 1;
     const answers  = parseAnswers(req.query.answers);
+    const locationId = req.query.location_id || '';
 
-    const { rows: cats } = await pool.query(
-      'SELECT * FROM categories WHERE slug = $1', [slug]
-    );
+    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
     const category = cats[0];
 
@@ -96,55 +86,64 @@ router.get('/form/:slug', async (req, res, next) => {
       [category.id]
     );
 
-    // Normalise options to always be a JSON string for the template
-    const normalisedQuestions = allQuestions.map(q => {
-      if (q.options && typeof q.options !== 'string') {
-        q.options = JSON.stringify(q.options);
-      }
-      return q;
-    });
+    const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
 
-    const maxGroup = normalisedQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
-
-    const groupQuestions = normalisedQuestions.filter(q => {
+    const groupQuestions = allQuestions.filter(q => {
       if (q.group_index !== group) return false;
-      // Apply conditional logic if present
       if (q.conditional_on_question_id && q.conditional_on_value) {
         const linkedAnswer = answers[String(q.conditional_on_question_id)];
         return String(linkedAnswer || '').trim().toLowerCase() ===
-               String(q.conditional_on_value || '').trim().toLowerCase();
+               String(q.conditional_on_value).trim().toLowerCase();
       }
       return true;
     });
 
+    let locations = [];
+    if (group === 1) {
+      const { rows } = await pool.query('SELECT * FROM locations ORDER BY name');
+      locations = rows;
+    }
+
     res.render('form', {
-      category,
-      questions: groupQuestions,
-      group,
-      maxGroup,
-      isLastGroup: group >= maxGroup,
-      answers,
-      slug,
+      category, questions: groupQuestions, group,
+      maxGroup, isLastGroup: group >= maxGroup,
+      answers, slug, locations, locationId,
     });
   } catch (err) { next(err); }
 });
 
-// ── POST /form/:slug/step — Advance to next step ──────────────────────────────
+// ── POST /form/:slug/step ─────────────────────────────────────────────────────
 router.post('/form/:slug/step', async (req, res, next) => {
   try {
-    const { slug }    = req.params;
-    const group       = parseInt(req.body._group) || 1;
-    const prevAnswers = parseAnswers(req.body._answers);
+    const { slug } = req.params;
+    const group    = parseInt(req.body._group) || 1;
 
-    // Merge previous answers with this step's answers (strip internal fields)
-    const stepAnswers = { ...req.body };
-    delete stepAnswers._group;
-    delete stepAnswers._answers;
+    // ── Parse previous answers carried from the hidden field ─────────────────
+    // The hidden field value is encodeURIComponent(JSON.stringify(answers)).
+    // express urlencoded middleware decodes it once, so we receive a plain
+    // JSON string — JSON.parse is sufficient, but fallbacks cover edge cases.
+    const prevAnswers = parseAnswers(req.body._answers);
+    const locationId  = req.body._location_id || '';
+
+    // ── Collect only this step's answers ─────────────────────────────────────
+    const stepAnswers = {};
+    Object.keys(req.body).forEach(key => {
+      // Skip all internal hidden fields
+      if (key.startsWith('_')) return;
+      stepAnswers[key] = req.body[key];
+    });
+
+    // Merge: previous answers + this step's answers
     const answers = { ...prevAnswers, ...stepAnswers };
 
-    const { rows: cats } = await pool.query(
-      'SELECT * FROM categories WHERE slug = $1', [slug]
-    );
+    console.log('--- STEP POST DEBUG ---');
+    console.log('group:', group);
+    console.log('prevAnswers:', prevAnswers);
+    console.log('stepAnswers:', stepAnswers);
+    console.log('merged answers:', answers);
+    console.log('locationId:', locationId);
+
+    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
     const { rows: allQuestions } = await pool.query(
@@ -152,66 +151,65 @@ router.post('/form/:slug/step', async (req, res, next) => {
       [cats[0].id]
     );
 
-    const maxGroup    = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
+    const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
     const answersJson = JSON.stringify(answers);
 
     if (group + 1 > maxGroup) {
-      return res.redirect(`/form/${slug}/images?answers=${encodeURIComponent(answersJson)}`);
+      return res.redirect(
+        `/form/${slug}/images?answers=${encodeURIComponent(answersJson)}&location_id=${encodeURIComponent(locationId)}`
+      );
     }
-    res.redirect(`/form/${slug}?group=${group + 1}&answers=${encodeURIComponent(answersJson)}`);
+
+    res.redirect(
+      `/form/${slug}?group=${group + 1}&answers=${encodeURIComponent(answersJson)}&location_id=${encodeURIComponent(locationId)}`
+    );
   } catch (err) { next(err); }
 });
 
-// ── GET /form/:slug/images — Image upload page ────────────────────────────────
+// ── GET /form/:slug/images ────────────────────────────────────────────────────
 router.get('/form/:slug/images', async (req, res, next) => {
   try {
-    const { slug } = req.params;
-    const answers  = parseAnswers(req.query.answers);
+    const { slug }   = req.params;
+    const answers    = parseAnswers(req.query.answers);
+    const locationId = req.query.location_id || '';
 
-    const { rows: cats } = await pool.query(
-      'SELECT * FROM categories WHERE slug = $1', [slug]
-    );
+    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
     res.render('images', {
-      category:    cats[0],
-      answers,
-      slug,
-      // ✅ Pass as plain JSON string — use <%- in template to avoid HTML escaping
-      answersJson: JSON.stringify(answers),
+      category: cats[0], answers, slug,
+      answersJson: encodeURIComponent(JSON.stringify(answers)),
+      locationId,
     });
   } catch (err) { next(err); }
 });
 
-// ── POST /form/:slug/submit — Save submission + images ────────────────────────
+// ── POST /form/:slug/submit ───────────────────────────────────────────────────
 router.post('/form/:slug/submit', upload.array('images', 10), async (req, res, next) => {
   const client = await pool.connect();
   try {
-    const { slug } = req.params;
+    const { slug }   = req.params;
+    const answers    = parseAnswers(req.body._answers);
+    const locationId = req.body._location_id ? parseInt(req.body._location_id) : null;
 
-    // ✅ _answers comes from hidden input as plain JSON string
-    const answers = parseAnswers(req.body._answers);
+    console.log('--- SUBMIT DEBUG ---');
+    console.log('answers:', answers);
+    console.log('locationId:', locationId);
 
-    // Debug log — remove once confirmed working
-    console.log('[submit] RAW _answers:', req.body._answers);
-    console.log('[submit] PARSED answers:', answers);
-
-    const { rows: cats } = await pool.query(
-      'SELECT * FROM categories WHERE slug = $1', [slug]
-    );
+    const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
     if (!cats.length) return res.status(404).render('error', { message: 'Category not found' });
 
     await client.query('BEGIN');
 
     const { rows: sub } = await client.query(
-      `INSERT INTO form_submissions (category_id, answers)
-       VALUES ($1, $2::jsonb) RETURNING id, submission_uuid`,
-      [cats[0].id, JSON.stringify(answers)]
+      `INSERT INTO form_submissions (category_id, answers, location_id)
+       VALUES ($1, $2, $3) RETURNING id, submission_uuid`,
+      [cats[0].id, JSON.stringify(answers), locationId]
     );
+
     const submissionId   = sub[0].id;
     const submissionUuid = sub[0].submission_uuid;
 
-    // Save images to DB as BYTEA
     if (req.files && req.files.length) {
       for (const file of req.files) {
         const imageBuffer = fs.readFileSync(file.path);
@@ -221,8 +219,6 @@ router.post('/form/:slug/submit', upload.array('images', 10), async (req, res, n
            VALUES ($1, $2, $3, $4, $5, $6)`,
           [submissionId, file.filename, file.originalname, file.mimetype, file.size, imageBuffer]
         );
-        // Clean up temp file from disk after saving to DB
-        fs.unlink(file.path, () => {});
       }
     }
 

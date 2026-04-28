@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS form_submissions (
 );
 
 -- Images linked to a submission
+-- Locations table
+CREATE TABLE IF NOT EXISTS locations (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(100) NOT NULL UNIQUE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Add location_id to form_submissions (if not exists)
+-- If you already have data, run this as a migration instead
+ALTER TABLE form_submissions ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES locations(id);
 CREATE TABLE IF NOT EXISTS submission_images (
   id SERIAL PRIMARY KEY,
   submission_id INTEGER REFERENCES form_submissions(id) ON DELETE CASCADE,

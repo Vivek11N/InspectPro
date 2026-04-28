@@ -67,7 +67,10 @@ body {
   cursor: pointer;
 }
 .category-card:hover { border-color: var(--primary); box-shadow: 0 4px 20px rgba(37,99,235,.15); transform: translateY(-3px); }
-.cat-icon { font-size: 2.8rem; margin-bottom: .75rem; }
+
+.cat-image {
+  overflow: hidden;
+}
 .category-card h2 { font-size: 1.2rem; font-weight: 700; }
 .category-card p { color: var(--muted); font-size: .9rem; margin-top: .4rem; }
 .btn-start { display: inline-block; margin-top: 1rem; color: var(--primary); font-weight: 600; font-size: .9rem; }
@@ -214,6 +217,12 @@ code { background: #f1f5f9; border-radius: 4px; padding: .1rem .35rem; font-size
 .alert { padding: 1rem 1.25rem; border-radius: 8px; margin-bottom: 1.5rem; font-size: .95rem; }
 .alert-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; }
 .alert a { color: inherit; font-weight: 700; }
+.cat-image img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  display: block;
+}
 
 /* ── Footer ──────────────────────────────────────────────────────────────── */
 .footer { text-align: center; color: var(--muted); font-size: .85rem; padding: 2rem; border-top: 1px solid var(--border); margin-top: 3rem; }

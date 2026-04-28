@@ -6,17 +6,14 @@ const fs      = require('fs');
 const pool    = require('../db/db');
 
 // ── Helper: safely parse answers from any source ─────────────────────────────
+// Replace your existing parseAnswers with this
 function parseAnswers(raw) {
   if (!raw) return {};
-  try {
-    return JSON.parse(raw);
-  } catch (e) {
-    try {
-      return JSON.parse(decodeURIComponent(raw));
-    } catch (e2) {
-      return {};
-    }
-  }
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch {}
+  try { return JSON.parse(decodeURIComponent(raw)); } catch {}
+  try { return JSON.parse(decodeURIComponent(decodeURIComponent(raw))); } catch {}
+  return {};
 }
 
 // ── Multer setup ──────────────────────────────────────────────────────────────
@@ -104,10 +101,18 @@ router.post('/form/:slug/step', async (req, res, next) => {
     const { slug }    = req.params;
     const group       = parseInt(req.body._group) || 1;
     const prevAnswers = parseAnswers(req.body._answers);
+    const locationId  = req.body._location_id || '';
 
     const stepAnswers = { ...req.body };
     delete stepAnswers._group;
     delete stepAnswers._answers;
+    delete stepAnswers._location_id;
+
+    // Filter out any empty-string keys that sneak in
+    Object.keys(stepAnswers).forEach(function(k) {
+      if (k.startsWith('_')) delete stepAnswers[k];
+    });
+
     const answers = { ...prevAnswers, ...stepAnswers };
 
     const { rows: cats } = await pool.query('SELECT * FROM categories WHERE slug = $1', [slug]);
@@ -118,15 +123,20 @@ router.post('/form/:slug/step', async (req, res, next) => {
       [cats[0].id]
     );
 
-    const maxGroup = allQuestions.reduce((m, q) => Math.max(m, q.group_index), 1);
+    const maxGroup = allQuestions.reduce(function(m, q) { return Math.max(m, q.group_index); }, 1);
     const answersJson = JSON.stringify(answers);
 
     if (group + 1 > maxGroup) {
-      return res.redirect(`/form/${slug}/images?answers=${encodeURIComponent(answersJson)}`);
+      return res.redirect(
+        '/form/' + slug + '/images?answers=' + encodeURIComponent(answersJson) + '&location_id=' + encodeURIComponent(locationId)
+      );
     }
-    res.redirect(`/form/${slug}?group=${group + 1}&answers=${encodeURIComponent(answersJson)}`);
+    res.redirect(
+      '/form/' + slug + '?group=' + (group + 1) + '&answers=' + encodeURIComponent(answersJson) + '&location_id=' + encodeURIComponent(locationId)
+    );
   } catch (err) { next(err); }
 });
+
 
 // ── GET /form/:slug/images — Image upload page ────────────────────────────────
 router.get('/form/:slug/images', async (req, res, next) => {

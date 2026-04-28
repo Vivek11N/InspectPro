@@ -1,0 +1,66 @@
+<%- include('../../partials/header', { title: location ? 'Edit Location' : 'Add Location' }) %>
+
+<div class="page-header">
+  <h1><%= location ? 'Edit Location' : 'Add Location' %></h1>
+  <a href="/admin/locations" class="btn btn-secondary">← Back to Locations</a>
+</div>
+
+<form method="POST" action="<%= action %>" class="admin-form">
+
+  <div class="form-group">
+    <label for="name">Location Name <span class="required">*</span></label>
+    <input
+      type="text"
+      name="name"
+      id="name"
+      class="form-input"
+      value="<%= location ? location.name : '' %>"
+      placeholder="e.g. Main Branch, Warehouse A, Floor 2"
+      required
+      autofocus
+    />
+  </div>
+
+  <div class="form-group">
+    <label>Description</label>
+    <textarea
+      name="description"
+      class="form-input form-textarea"
+      rows="3"
+      placeholder="Optional description for this location"><%= location ? (location.description || '') : '' %></textarea>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label>Order Index</label>
+      <input
+        type="number"
+        name="order_index"
+        class="form-input"
+        min="0"
+        value="<%= location ? (location.order_index || 0) : 0 %>"
+      />
+    </div>
+
+    <div class="form-group">
+      <label class="checkbox-label">
+        <input
+          type="checkbox"
+          name="is_active"
+          <%= (location && location.is_active) ? 'checked' : '' %>
+        />
+        Active
+      </label>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">
+      <%= location ? 'Update Location' : 'Create Location' %>
+    </button>
+    <a href="/admin/locations" class="btn btn-secondary">Cancel</a>
+  </div>
+
+</form>
+
+<%- include('../../partials/footer') %>

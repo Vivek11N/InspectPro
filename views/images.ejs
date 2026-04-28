@@ -15,7 +15,7 @@
 
   <!-- Plain JSON string — NOT URL encoded -->
   <input type="hidden" name="_answers" value="<%= answersJson.replace(/"/g, '&quot;') %>">
-
+  <input type="hidden" name="_location_id" value="<%= locationId %>">
   <div class="upload-area" id="uploadArea">
     <div class="upload-icon">📷</div>
     <p>Drag & drop images here or <label for="images" class="upload-link">browse</label></p>

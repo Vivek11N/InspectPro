@@ -7,6 +7,7 @@
 
 <div class="detail-meta">
   <span>🕐 Submitted: <strong><%= new Date(submission.submitted_at).toLocaleString() %></strong></span>
+  <span>📍 Location: <strong><%= submission.location_name || '—' %></strong></span>
   <span>🆔 UUID: <code><%= submission.submission_uuid %></code></span>
 </div>
 
