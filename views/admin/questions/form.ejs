@@ -42,7 +42,7 @@
 
     
     <div class="form-group">
-      <label>Field Type <span class="required">*</span></label>
+      <label>Answer Type <span class="required">*</span></label>
       <select name="field_type" class="form-input" required id="fieldType">
         <option value="">— Select Type —</option>
         <option value="text"     <%= (question && question.field_type === 'text')     ? 'selected' : '' %>>Text Input</option>
@@ -71,13 +71,13 @@
 
   <div class="form-row">
     <div class="form-group">
-      <label>Group / Step Index</label>
+      <label>Group Number</label>
       <input type="number" name="group_index" class="form-input" min="1"
              value="<%= question ? question.group_index : 1 %>" />
     </div>
 
     <div class="form-group">
-      <label>Order Index</label>
+      <label>Question number</label>
       <input type="number" name="order_index" class="form-input" min="0"
              value="<%= question ? question.order_index : 0 %>" />
     </div>
@@ -91,7 +91,7 @@
 
     <div class="form-row">
       <div class="form-group">
-        <label>Show When This Question</label>
+        <label>Show When The Question</label>
         <select name="conditional_on_question_id" class="form-input" id="conditionalField">
           <option value="">— None (Always Show) —</option>
           <% if (allQuestions && allQuestions.length > 0) { %>
